@@ -11,6 +11,21 @@ sudo dnf install sway sway-config-fedora swaybg swayidle swaylock sway-systemd \
     foot rofi waybar grim slurp grimshot wl-clipboard pipewire wireplumber
 ```
 
+## Ghostty (terminal emulator, built from source)
+
+```sh
+# Build deps
+sudo dnf install zig gtk4-devel gtk4-layer-shell-devel libadwaita-devel gettext
+
+# Download tip source tarball (NOT the GitHub auto-generated "Source code" archive)
+curl -LO https://github.com/ghostty-org/ghostty/releases/download/tip/ghostty-source.tar.gz
+tar -xf ghostty-source.tar.gz
+cd ghostty-*
+
+# Build and install to ~/.local
+zig build -Doptimize=ReleaseFast -p $HOME/.local
+```
+
 ## Additional Packages
 
 ```sh
@@ -40,7 +55,7 @@ rm -rf ~/.config/sway ~/.config/mako ~/.config/waybar
 ln -s ~/.dotfiles/sway ~/.config/sway
 ln -s ~/.dotfiles/mako ~/.config/mako
 ln -s ~/.dotfiles/waybar ~/.config/waybar
-ln -s ~/.dotfiles/foot ~/.config/foot
+ln -s ~/.dotfiles/ghostty ~/.config/ghostty
 ln -s ~/.dotfiles/gtk-3.0 ~/.config/gtk-3.0
 ln -s ~/.dotfiles/gtk-4.0 ~/.config/gtk-4.0
 ```
@@ -50,8 +65,8 @@ ln -s ~/.dotfiles/gtk-4.0 ~/.config/gtk-4.0
 ```
 ~/.dotfiles/
 ├── install.md                              # This file
-├── foot/
-│   └── foot.ini                            # Terminal font size, scrollback, colors
+├── ghostty/
+│   └── config                              # Terminal font size, appearance
 ├── gtk-3.0/
 │   └── settings.ini                        # GTK3 dark theme + font + cursor
 ├── gtk-4.0/
@@ -104,7 +119,7 @@ Stripped from Fedora defaults: battery, backlight, power-profiles-daemon, mpd, c
 
 | Binding | Action |
 |---------|--------|
-| Mod+Return | Terminal (foot) |
+| Mod+Return | Terminal (ghostty) |
 | Mod+d | App launcher (rofi) |
 | Mod+Shift+q | Kill window |
 | Mod+Shift+c | Reload sway config |
