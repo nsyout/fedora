@@ -99,6 +99,12 @@ ln -s ~/.dotfiles/systemd/user/check-updates.timer ~/.config/systemd/user/
 │   └── user/
 │       ├── check-updates.service           # Oneshot service for update check
 │       └── check-updates.timer             # Daily timer with random delay
+├── etc/
+│   ├── sysctl.d/
+│   │   └── 90-hardening.conf               # Kernel sysctl hardening
+│   └── systemd/
+│       └── resolved.conf.d/
+│           └── quad9.conf                   # DNS-over-TLS with Quad9
 ├── mako/
 │   └── config                              # Notification daemon settings
 └── waybar/
@@ -174,9 +180,47 @@ systemctl --user daemon-reload
 systemctl --user enable --now check-updates.timer
 ```
 
+### CPU microcode
+
+```sh
+sudo dnf install amd-ucode-firmware
+```
+
+Patches CPU hardware vulnerabilities. Applied on next boot.
+
+### Kernel sysctl hardening
+
+Config stored in dotfiles at `etc/sysctl.d/90-hardening.conf`. Install with:
+
+```sh
+sudo cp ~/.dotfiles/etc/sysctl.d/90-hardening.conf /etc/sysctl.d/90-hardening.conf
+sudo sysctl --system
+```
+
+Hardens: kernel pointer hiding, kexec disabled, core dumps disabled, BPF restricted,
+network (SYN cookies, reverse path filtering, no ICMP redirects, no TCP timestamps),
+symlink/hardlink protection.
+
+### DNS-over-TLS (Quad9)
+
+Config stored in dotfiles at `etc/systemd/resolved.conf.d/quad9.conf`. Install with:
+
+```sh
+sudo mkdir -p /etc/systemd/resolved.conf.d
+sudo cp ~/.dotfiles/etc/systemd/resolved.conf.d/quad9.conf /etc/systemd/resolved.conf.d/quad9.conf
+sudo systemctl restart systemd-resolved
+```
+
+Uses Quad9 (9.9.9.9 / 149.112.112.112) with DNS-over-TLS and DNSSEC validation.
+Verify with: `resolvectl status`
+
 ### SELinux
 
 Enforcing (Fedora default). Don't disable it.
+
+### Disk encryption
+
+LUKS full-disk encryption configured at install time.
 
 ## Key Bindings Reference
 
