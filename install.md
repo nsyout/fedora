@@ -115,6 +115,45 @@ Modules (left to right): workspaces, mode, scratchpad | window title | idle inhi
 
 Stripped from Fedora defaults: battery, backlight, power-profiles-daemon, mpd, custom/media, custom/power (not needed on desktop).
 
+## Security
+
+### Tailscale
+
+```sh
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo systemctl enable --now tailscaled
+sudo tailscale up
+```
+
+### SSH locked to Tailscale
+
+Drop-in config at `/etc/ssh/sshd_config.d/99-tailscale.conf`:
+
+```
+ListenAddress 100.96.1.7
+PermitRootLogin no
+MaxAuthTries 3
+```
+
+```sh
+sudo systemctl restart sshd
+```
+
+### Firewall
+
+Fedora ships firewalld active with `public` zone. After moving SSH to Tailscale, remove it from the public zone:
+
+```sh
+sudo firewall-cmd --zone=public --remove-service=ssh --permanent
+sudo firewall-cmd --reload
+```
+
+Remaining public zone services: `dhcpv6-client`, `mdns`.
+
+### SELinux
+
+Enforcing (Fedora default). Don't disable it.
+
 ## Key Bindings Reference
 
 | Binding | Action |
