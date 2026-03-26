@@ -40,6 +40,8 @@ rm -rf ~/.config/sway ~/.config/mako ~/.config/waybar
 ln -s ~/.dotfiles/sway ~/.config/sway
 ln -s ~/.dotfiles/mako ~/.config/mako
 ln -s ~/.dotfiles/waybar ~/.config/waybar
+ln -s ~/.dotfiles/gtk-3.0 ~/.config/gtk-3.0
+ln -s ~/.dotfiles/gtk-4.0 ~/.config/gtk-4.0
 ```
 
 ## Config Structure
@@ -47,8 +49,13 @@ ln -s ~/.dotfiles/waybar ~/.config/waybar
 ```
 ~/.dotfiles/
 ├── install.md                              # This file
+├── gtk-3.0/
+│   └── settings.ini                        # GTK3 dark theme + font + cursor
+├── gtk-4.0/
+│   └── settings.ini                        # GTK4 dark theme + font + cursor
 ├── sway/
 │   ├── config                              # Main sway config (based on Fedora defaults)
+│   ├── environment                         # Env vars (GTK_THEME, QT, Java)
 │   └── config.d/
 │       ├── 50-rules-browser.conf           # Fullscreen browser inhibits idle
 │       ├── 50-rules-pavucontrol.conf       # Pavucontrol floats centered
@@ -71,6 +78,13 @@ ln -s ~/.dotfiles/waybar ~/.config/waybar
     ├── config.jsonc                        # Bar layout and modules
     └── style.css                           # Bar styling
 ```
+
+## Theming
+
+- GTK 3 & 4: Adwaita-dark via `settings.ini`
+- Sway cursor: Adwaita 24px via `seat seat0 xcursor_theme`
+- Env vars in `sway/environment`: `GTK_THEME=Adwaita:dark`, `QT_QPA_PLATFORMTHEME=gtk3`
+- Font: Noto Sans 11pt for GTK apps
 
 ## Waybar
 

@@ -1,0 +1,11 @@
+# User environment variables for Sway
+# Sourced by /usr/bin/start-sway
+
+# GTK dark theme
+GTK_THEME=Adwaita:dark
+
+# Qt theme (follows GTK if qt5ct/qt6ct not installed)
+QT_QPA_PLATFORMTHEME=gtk3
+
+# Application compatibility
+_JAVA_AWT_WM_NONREPARENTING=1
