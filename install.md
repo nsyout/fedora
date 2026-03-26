@@ -188,6 +188,8 @@ Enforcing (Fedora default). Don't disable it.
 | Mod+Shift+c | Reload sway config |
 | Mod+Shift+e | Exit sway |
 | Mod+Shift+Escape | Lock screen |
+| Mod+n | Dismiss notification |
+| Mod+Shift+n | Dismiss all notifications |
 | Mod+h/j/k/l | Focus left/down/up/right |
 | Mod+Shift+h/j/k/l | Move window |
 | Mod+1-0 | Switch workspace 1-10 |
