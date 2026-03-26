@@ -58,6 +58,9 @@ ln -s ~/.dotfiles/waybar ~/.config/waybar
 ln -s ~/.dotfiles/ghostty ~/.config/ghostty
 ln -s ~/.dotfiles/gtk-3.0 ~/.config/gtk-3.0
 ln -s ~/.dotfiles/gtk-4.0 ~/.config/gtk-4.0
+mkdir -p ~/.config/systemd/user
+ln -s ~/.dotfiles/systemd/user/check-updates.service ~/.config/systemd/user/
+ln -s ~/.dotfiles/systemd/user/check-updates.timer ~/.config/systemd/user/
 ```
 
 ## Config Structure
@@ -90,6 +93,12 @@ ln -s ~/.dotfiles/gtk-4.0 ~/.config/gtk-4.0
 │       ├── 95-autostart-policykit-agent.conf
 │       ├── 95-xdg-desktop-autostart.conf   # XDG autostart (nm-applet, blueman, etc.)
 │       └── 95-xdg-user-dirs.conf
+├── scripts/
+│   └── check-updates.sh                    # Daily dnf update check → notification
+├── systemd/
+│   └── user/
+│       ├── check-updates.service           # Oneshot service for update check
+│       └── check-updates.timer             # Daily timer with random delay
 ├── mako/
 │   └── config                              # Notification daemon settings
 └── waybar/
@@ -149,6 +158,21 @@ sudo firewall-cmd --reload
 ```
 
 Remaining public zone services: `dhcpv6-client`, `mdns`.
+
+### Update notifications
+
+A systemd user timer runs daily, checks for available dnf updates, and sends a desktop notification via notify-send/mako if any are found.
+
+```sh
+# Symlink units
+mkdir -p ~/.config/systemd/user
+ln -s ~/.dotfiles/systemd/user/check-updates.service ~/.config/systemd/user/
+ln -s ~/.dotfiles/systemd/user/check-updates.timer ~/.config/systemd/user/
+
+# Enable
+systemctl --user daemon-reload
+systemctl --user enable --now check-updates.timer
+```
 
 ### SELinux
 

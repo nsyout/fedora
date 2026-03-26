@@ -1,0 +1,6 @@
+[Unit]
+Description=Check for dnf updates and notify
+
+[Service]
+Type=oneshot
+ExecStart=%h/.dotfiles/scripts/check-updates.sh
