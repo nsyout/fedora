@@ -68,9 +68,20 @@ ln -s ~/.dotfiles/waybar ~/.config/waybar
 ├── mako/
 │   └── config                              # Notification daemon settings
 └── waybar/
-    ├── config                              # Bar layout and modules (TODO)
-    └── style.css                           # Bar styling (TODO)
+    ├── config.jsonc                        # Bar layout and modules
+    └── style.css                           # Bar styling
 ```
+
+## Waybar
+
+Modules (left to right): workspaces, mode, scratchpad | window title | idle inhibitor, volume, network, bluetooth, cpu, memory, temperature, clock, tray
+
+- Click volume module → opens pavucontrol
+- Click bluetooth module → opens blueman-manager
+- Click clock → toggles date format
+- Idle inhibitor toggle → prevents screen lock when active
+
+Stripped from Fedora defaults: battery, backlight, power-profiles-daemon, mpd, custom/media, custom/power (not needed on desktop).
 
 ## Key Bindings Reference
 
