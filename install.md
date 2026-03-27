@@ -112,6 +112,7 @@ ln -s ~/.dotfiles/systemd/user/check-updates.timer ~/.config/systemd/user/
 ├── etc/
 │   ├── fail2ban/
 │   │   └── jail.local                       # Fail2ban config (sshd, 3 attempts, 1h ban)
+│   ├── chrony.conf                        # NTP config with NTS-authenticated servers
 │   ├── sysctl.d/
 │   │   └── 90-hardening.conf               # Kernel sysctl hardening
 │   └── systemd/
@@ -251,6 +252,16 @@ Prompts to allow/deny outbound connections per-application. Launch UI with `open
 
 Set to 10 minutes (lock) + 1 minute (screen off after lock) via `$lock_timeout` and
 `$screen_timeout` variables in sway config. Swayidle picks these up from `90-swayidle.conf`.
+
+### NTP with NTS (authenticated time)
+
+```sh
+sudo cp ~/.dotfiles/etc/chrony.conf /etc/chrony.conf
+sudo systemctl restart chronyd
+```
+
+Uses NTS-authenticated servers (Cloudflare, System76) with Fedora pool as fallback.
+Verify with: `chronyc sources`
 
 ### SELinux
 
