@@ -1,0 +1,168 @@
+#!/bin/bash
+# dot - dotfiles management for Fedora/Sway
+set -euo pipefail
+
+DOTFILES_DIR="$HOME/.dotfiles"
+
+info() { echo ":: $*"; }
+error() { echo "!! $*" >&2; }
+
+cmd_update() {
+    info "Updating system packages..."
+    sudo dnf update -y
+
+    info ""
+    info "Updating manually-managed tools..."
+    "$DOTFILES_DIR/scripts/update-tools.sh"
+
+    info ""
+    info "Done."
+}
+
+cmd_stow() {
+    info "Linking dotfiles..."
+
+    # Config directories
+    for dir in sway mako waybar ghostty gtk-3.0 gtk-4.0 foot starship ripgrep bat git btop nvim tmux zsh; do
+        local target="$HOME/.config/$dir"
+        local source="$DOTFILES_DIR/$dir"
+        if [[ -d "$source" ]]; then
+            if [[ -L "$target" ]]; then
+                echo "  OK: $dir"
+            elif [[ -e "$target" ]]; then
+                echo "  SKIP: $dir (exists, not a symlink)"
+            else
+                ln -s "$source" "$target"
+                echo "  LINKED: $dir"
+            fi
+        fi
+    done
+
+    # Home directory files
+    if [[ -f "$DOTFILES_DIR/.zshenv" ]]; then
+        ln -sf "$DOTFILES_DIR/.zshenv" "$HOME/.zshenv"
+        echo "  OK: .zshenv"
+    fi
+
+    # Systemd user units
+    mkdir -p "$HOME/.config/systemd/user"
+    for unit in check-updates.service check-updates.timer; do
+        local target="$HOME/.config/systemd/user/$unit"
+        local source="$DOTFILES_DIR/systemd/user/$unit"
+        if [[ -f "$source" ]] && [[ ! -e "$target" ]]; then
+            ln -s "$source" "$target"
+            echo "  LINKED: systemd/$unit"
+        else
+            echo "  OK: systemd/$unit"
+        fi
+    done
+
+    info "Done."
+}
+
+cmd_system() {
+    info "Installing system configs..."
+
+    local configs=(
+        "etc/sysctl.d/90-hardening.conf:/etc/sysctl.d/90-hardening.conf"
+        "etc/systemd/resolved.conf.d/quad9.conf:/etc/systemd/resolved.conf.d/quad9.conf"
+        "etc/chrony.conf:/etc/chrony.conf"
+        "etc/fail2ban/jail.local:/etc/fail2ban/jail.local"
+    )
+
+    for entry in "${configs[@]}"; do
+        local src="${entry%%:*}"
+        local dst="${entry##*:}"
+        if [[ -f "$DOTFILES_DIR/$src" ]]; then
+            sudo mkdir -p "$(dirname "$dst")"
+            sudo cp "$DOTFILES_DIR/$src" "$dst"
+            echo "  INSTALLED: $dst"
+        fi
+    done
+
+    info "Reloading services..."
+    sudo sysctl --system > /dev/null 2>&1
+    sudo systemctl restart systemd-resolved
+    sudo systemctl restart chronyd
+    sudo systemctl restart fail2ban
+
+    info "Done."
+}
+
+cmd_doctor() {
+    info "Checking system status..."
+    echo ""
+
+    # Shell
+    local shell_ok="no"
+    [[ "$SHELL" == */zsh ]] && shell_ok="yes"
+    echo "  Shell (zsh): $shell_ok ($SHELL)"
+
+    # Services
+    for svc in sshd firewalld tailscaled fail2ban chronyd opensnitch; do
+        local status
+        status=$(systemctl is-active "$svc" 2>/dev/null || echo "not found")
+        echo "  Service ($svc): $status"
+    done
+
+    # SELinux
+    echo "  SELinux: $(getenforce 2>/dev/null || echo 'unknown')"
+
+    # DNS
+    local dns
+    dns=$(resolvectl status 2>/dev/null | grep "Current DNS Server" | head -1 | awk '{print $NF}')
+    echo "  DNS: ${dns:-unknown}"
+
+    # Tools
+    for tool in sway ghostty starship nvim tmux bat eza zoxide fzf btop; do
+        if command -v "$tool" > /dev/null 2>&1; then
+            echo "  Tool ($tool): installed"
+        else
+            echo "  Tool ($tool): MISSING"
+        fi
+    done
+
+    echo ""
+    info "Done."
+}
+
+cmd_help() {
+    cat <<'EOF'
+dot - dotfiles management
+
+Usage:
+  dot <command>
+
+Commands:
+  update      Update system packages and manually-managed tools
+  stow        Link dotfiles into ~/.config
+  system      Install system configs (/etc) — requires sudo
+  doctor      Check system status and installed tools
+  edit        Open dotfiles in $EDITOR
+  help        Show this help
+
+Examples:
+  dot update
+  dot doctor
+  dot stow
+EOF
+}
+
+cmd_edit() {
+    "${EDITOR:-nvim}" "$DOTFILES_DIR"
+}
+
+main() {
+    local command="${1:-help}"
+    case "$command" in
+        update)  cmd_update ;;
+        stow)    cmd_stow ;;
+        system)  cmd_system ;;
+        doctor)  cmd_doctor ;;
+        edit)    cmd_edit ;;
+        help|-h|--help) cmd_help ;;
+        *) error "Unknown command: $command"; cmd_help; exit 1 ;;
+    esac
+}
+
+main "$@"
