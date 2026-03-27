@@ -273,7 +273,6 @@ then `sudo systemctl enable --now usbguard`. New devices approved via `usbguard 
 | Mod+Shift+h/j/k/l | Move window |
 | Mod+1-0 | Switch workspace 1-10 |
 | Mod+Shift+1-0 | Move window to workspace |
-| Mod+b / Mod+v | Split horizontal / vertical |
 | Mod+e | Toggle split direction |
 | Mod+f | Fullscreen |
 | Mod+Shift+Space | Toggle floating |
