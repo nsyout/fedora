@@ -11,19 +11,25 @@ sudo dnf install sway sway-config-fedora swaybg swayidle swaylock sway-systemd \
     foot rofi waybar grim slurp grimshot wl-clipboard pipewire wireplumber
 ```
 
-## Ghostty (terminal emulator, built from source)
+## Manually-managed tools (not in dnf repos)
+
+Ghostty and Starship are installed to `~/.local/bin` from GitHub releases.
+Update both with:
 
 ```sh
-# Build deps
+~/.dotfiles/scripts/update-tools.sh
+```
+
+Or update individually: `update-tools.sh starship` or `update-tools.sh ghostty`.
+
+### Initial install
+
+```sh
+# Ghostty build deps
 sudo dnf install zig gtk4-devel gtk4-layer-shell-devel libadwaita-devel gettext
 
-# Download tip source tarball (NOT the GitHub auto-generated "Source code" archive)
-curl -LO https://github.com/ghostty-org/ghostty/releases/download/tip/ghostty-source.tar.gz
-tar -xf ghostty-source.tar.gz
-cd ghostty-*
-
-# Build and install to ~/.local
-zig build -Doptimize=ReleaseFast -p $HOME/.local
+# Install/update both
+~/.dotfiles/scripts/update-tools.sh
 ```
 
 ## Additional Packages
