@@ -17,7 +17,7 @@ set $right l
 set $term ghostty
 
 # Idle/lock timeouts (used by 90-swayidle.conf)
-set $lock_timeout 600
+set $lock_timeout 900
 set $screen_timeout 60
 # Your preferred application launcher
 # Note: pass the final command to swaymsg so that the resulting window can be opened
