@@ -43,6 +43,7 @@ seat seat0 xcursor_theme Adwaita 24
 # Default wallpaper (more resolutions are available in /usr/share/backgrounds/sway/)
 # Requires: desktop-backgrounds-compat, swaybg, jxl-pixbuf-loader
 output * bg /usr/share/backgrounds/default.jxl fill
+output DP-1 scale 1.5
 #
 # Example configuration:
 #
