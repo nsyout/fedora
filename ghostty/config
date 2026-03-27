@@ -1,5 +1,5 @@
 font-family = Iosevka Nerd Font Mono
 font-size = 12
-theme = light:Flexoki Light,dark:Flexoki Dark
+theme = Flexoki Dark
 # window-decoration = false
 gtk-titlebar = false
