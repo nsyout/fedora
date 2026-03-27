@@ -30,6 +30,11 @@ set $rofi_cmd rofi \
 # TODO: add window with the next release of rofi-wayland
 set $menu $rofi_cmd -show combi -combi-modes drun#run -modes combi
 
+### Layout defaults
+default_orientation auto
+gaps inner 8
+gaps outer 8
+
 ### Cursor
 seat seat0 xcursor_theme Adwaita 24
 
@@ -80,7 +85,7 @@ output * bg /usr/share/backgrounds/default.jxl fill
     bindsym $mod+Return exec $term
 
     # Kill focused window
-    bindsym $mod+Shift+q kill
+    bindsym $mod+w kill
 
     # Start your launcher
     bindsym $mod+d exec $menu
@@ -157,9 +162,7 @@ output * bg /usr/share/backgrounds/default.jxl fill
     bindsym $mod+b splith
     bindsym $mod+v splitv
 
-    # Switch the current container between different layout styles
-    bindsym $mod+s layout stacking
-    bindsym $mod+w layout tabbed
+    # Toggle split direction
     bindsym $mod+e layout toggle split
 
     # Make the current focus fullscreen

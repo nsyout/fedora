@@ -263,7 +263,7 @@ then `sudo systemctl enable --now usbguard`. New devices approved via `usbguard 
 |---------|--------|
 | Mod+Return | Terminal (ghostty) |
 | Mod+d | App launcher (rofi) |
-| Mod+Shift+q | Kill window |
+| Mod+w | Kill window |
 | Mod+Shift+c | Reload sway config |
 | Mod+Shift+e | Exit sway |
 | Mod+Shift+Escape | Lock screen |
@@ -274,7 +274,7 @@ then `sudo systemctl enable --now usbguard`. New devices approved via `usbguard 
 | Mod+1-0 | Switch workspace 1-10 |
 | Mod+Shift+1-0 | Move window to workspace |
 | Mod+b / Mod+v | Split horizontal / vertical |
-| Mod+s / Mod+w / Mod+e | Stacking / tabbed / toggle split |
+| Mod+e | Toggle split direction |
 | Mod+f | Fullscreen |
 | Mod+Shift+Space | Toggle floating |
 | Mod+Space | Toggle focus tiling/floating |
