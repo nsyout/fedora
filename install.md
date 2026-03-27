@@ -100,6 +100,8 @@ ln -s ~/.dotfiles/systemd/user/check-updates.timer ~/.config/systemd/user/
 │       ├── check-updates.service           # Oneshot service for update check
 │       └── check-updates.timer             # Daily timer with random delay
 ├── etc/
+│   ├── fail2ban/
+│   │   └── jail.local                       # Fail2ban config (sshd, 3 attempts, 1h ban)
 │   ├── sysctl.d/
 │   │   └── 90-hardening.conf               # Kernel sysctl hardening
 │   └── systemd/
@@ -214,6 +216,32 @@ sudo systemctl restart systemd-resolved
 Uses Quad9 (9.9.9.9 / 149.112.112.112) with DNS-over-TLS and DNSSEC validation.
 Verify with: `resolvectl status`
 
+### Fail2ban
+
+```sh
+sudo dnf install fail2ban
+sudo cp ~/.dotfiles/etc/fail2ban/jail.local /etc/fail2ban/jail.local
+sudo systemctl enable --now fail2ban
+```
+
+Bans IPs after 3 failed auth attempts for 1 hour. Watches sshd.
+
+### OpenSnitch (outbound firewall)
+
+Download RPMs from https://github.com/evilsocket/opensnitch/releases
+
+```sh
+sudo dnf install ./opensnitch-*.x86_64.rpm ./opensnitch-ui-*.noarch.rpm
+sudo systemctl enable --now opensnitch
+```
+
+Prompts to allow/deny outbound connections per-application. Launch UI with `opensnitch-ui`.
+
+### Idle lock timeout
+
+Set to 10 minutes (lock) + 1 minute (screen off after lock) via `$lock_timeout` and
+`$screen_timeout` variables in sway config. Swayidle picks these up from `90-swayidle.conf`.
+
 ### SELinux
 
 Enforcing (Fedora default). Don't disable it.
@@ -221,6 +249,13 @@ Enforcing (Fedora default). Don't disable it.
 ### Disk encryption
 
 LUKS full-disk encryption configured at install time.
+
+### Notes for laptop reuse
+
+**USBGuard** — consider installing for laptop deployments where physical access is less controlled.
+Whitelists known USB devices, blocks new ones until approved. Install with `sudo dnf install usbguard`,
+generate initial policy with `sudo usbguard generate-policy > /etc/usbguard/rules.conf`,
+then `sudo systemctl enable --now usbguard`. New devices approved via `usbguard allow-device`.
 
 ## Key Bindings Reference
 
