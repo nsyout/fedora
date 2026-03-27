@@ -43,6 +43,16 @@ sudo dnf install mako brightnessctl playerctl pavucontrol \
 | xdg-desktop-portal-wlr | Screen sharing support for Sway |
 | blueman | Bluetooth manager with tray applet |
 
+## Fonts
+
+```sh
+# Iosevka Nerd Font (terminal + waybar)
+mkdir -p ~/.local/share/fonts
+curl -LO https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/Iosevka.tar.xz
+tar -xf Iosevka.tar.xz -C ~/.local/share/fonts/
+fc-cache -f
+```
+
 ## Dotfiles Setup
 
 ### Symlink configs into place
