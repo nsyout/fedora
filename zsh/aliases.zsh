@@ -30,8 +30,8 @@ alias path='echo -e ${PATH//:/\\n}'
 # ------------------------------------------------------------------------------
 
 # Folder shortcuts (system directories)
-[ -d ~/Downloads ] && alias dl='cd ~/Downloads' || [ -d ~/downloads ] && alias dl='cd ~/downloads'
-[ -d ~/Desktop ]   && alias dt='cd ~/Desktop'   || [ -d ~/desktop ]   && alias dt='cd ~/desktop'
+alias dl='cd ~/downloads'
+alias dt='cd ~/desktop'
 
 # Personal project directories
 [ -d ~/projects ]             && alias pj='cd ~/projects'

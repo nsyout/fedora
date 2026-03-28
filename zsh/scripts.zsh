@@ -832,7 +832,7 @@ webmirror() {
   fi
 
   if [ -z "$outdir" ]; then
-    outdir="$HOME/Downloads/$host"
+    outdir="$HOME/downloads/$host"
   fi
 
   _webmirror_check_robots "$url" || return 1
@@ -878,7 +878,7 @@ webmirror-deep() {
   host="${host%%:*}"
 
   if [ -z "$outdir" ]; then
-    outdir="$HOME/Downloads/$host"
+    outdir="$HOME/downloads/$host"
   fi
 
   _webmirror_check_robots "$url" || return 1
