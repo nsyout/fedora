@@ -1,0 +1,22 @@
+# Base defaults for ad-hoc yt-dlp runs.
+# Helper functions in .config/zsh/scripts.zsh override paths/formats when needed.
+# Do not store cookies, tokens, usernames, or passwords in this tracked file.
+# Browser cookies are read at runtime from the local machine only.
+--cookies-from-browser
+firefox
+--paths
+home:~/media/external/ytdlp
+--paths
+temp:~/media/external/ytdlp/.tmp
+--output
+%(extractor)s/%(uploader)s/%(upload_date)s-%(title)s [%(id)s].%(ext)s
+--write-info-json
+--write-thumbnail
+--trim-filenames
+160
+--sleep-requests
+1
+--min-sleep-interval
+1
+--max-sleep-interval
+5

@@ -1,0 +1,34 @@
+# Personal profile packages — installed on personal machines
+# One package per line. Lines starting with # are comments.
+
+# YubiKey
+yubikey-manager
+
+# Media
+yt-dlp
+ffmpeg-free
+aria2
+
+# Blog & dev
+hugo
+uv
+rustup
+golang
+ansible
+
+# Apps (1Password repo must be configured first)
+1password
+1password-cli
+
+# Media
+vlc
+
+# Editors (Sublime Text repo must be configured first)
+sublime-text
+
+# Cloud storage — moved to flatpaks.personal
+
+# Gallery downloads (pip-managed)
+# gallery-dl  # installed via: pip install --user gallery-dl
+
+# Flatpak apps are managed separately in flatpaks.personal

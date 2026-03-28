@@ -1,168 +1,433 @@
-#!/bin/bash
-# dot - dotfiles management for Fedora/Sway
+#!/usr/bin/env bash
+
 set -euo pipefail
 
-DOTFILES_DIR="$HOME/.dotfiles"
+resolve_script_path() {
+	local source_path="${BASH_SOURCE[0]}"
+	while [[ -L "$source_path" ]]; do
+		local dir
+		dir="$(cd -P "$(dirname "$source_path")" && pwd)"
+		source_path="$(readlink "$source_path")"
+		[[ "$source_path" != /* ]] && source_path="$dir/$source_path"
+	done
 
-info() { echo ":: $*"; }
-error() { echo "!! $*" >&2; }
-
-cmd_update() {
-    info "Updating system packages..."
-    sudo dnf update -y
-
-    info ""
-    info "Updating manually-managed tools..."
-    "$DOTFILES_DIR/scripts/update-tools.sh"
-
-    info ""
-    info "Done."
+	cd -P "$(dirname "$source_path")" && pwd
 }
 
-cmd_stow() {
-    info "Linking dotfiles..."
+DOTFILES_DIR="${DOTFILES_DIR:-$(resolve_script_path)}"
 
-    # Config directories
-    for dir in sway mako waybar ghostty gtk-3.0 gtk-4.0 foot starship ripgrep bat git btop nvim tmux zsh; do
-        local target="$HOME/.config/$dir"
-        local source="$DOTFILES_DIR/$dir"
-        if [[ -d "$source" ]]; then
-            if [[ -L "$target" ]]; then
-                echo "  OK: $dir"
-            elif [[ -e "$target" ]]; then
-                echo "  SKIP: $dir (exists, not a symlink)"
-            else
-                ln -s "$source" "$target"
-                echo "  LINKED: $dir"
-            fi
-        fi
-    done
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/common.sh"
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/profile.sh"
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/stow.sh"
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/cmd_git.sh"
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/cmd_ssh.sh"
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/cmd_firefox.sh"
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/packages.sh"
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/cmd_theme.sh"
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/cmd_wallpaper.sh"
+# shellcheck disable=SC1091
+source "$DOTFILES_DIR/scripts/lib/cmd_init.sh"
 
-    # Home directory files
-    if [[ -f "$DOTFILES_DIR/.zshenv" ]]; then
-        ln -sf "$DOTFILES_DIR/.zshenv" "$HOME/.zshenv"
-        echo "  OK: .zshenv"
-    fi
-
-    # Systemd user units
-    mkdir -p "$HOME/.config/systemd/user"
-    for unit in check-updates.service check-updates.timer; do
-        local target="$HOME/.config/systemd/user/$unit"
-        local source="$DOTFILES_DIR/systemd/user/$unit"
-        if [[ -f "$source" ]] && [[ ! -e "$target" ]]; then
-            ln -s "$source" "$target"
-            echo "  LINKED: systemd/$unit"
-        else
-            echo "  OK: systemd/$unit"
-        fi
-    done
-
-    info "Done."
-}
-
-cmd_system() {
-    info "Installing system configs..."
-
-    local configs=(
-        "etc/sysctl.d/90-hardening.conf:/etc/sysctl.d/90-hardening.conf"
-        "etc/systemd/resolved.conf.d/quad9.conf:/etc/systemd/resolved.conf.d/quad9.conf"
-        "etc/chrony.conf:/etc/chrony.conf"
-        "etc/fail2ban/jail.local:/etc/fail2ban/jail.local"
-    )
-
-    for entry in "${configs[@]}"; do
-        local src="${entry%%:*}"
-        local dst="${entry##*:}"
-        if [[ -f "$DOTFILES_DIR/$src" ]]; then
-            sudo mkdir -p "$(dirname "$dst")"
-            sudo cp "$DOTFILES_DIR/$src" "$dst"
-            echo "  INSTALLED: $dst"
-        fi
-    done
-
-    info "Reloading services..."
-    sudo sysctl --system > /dev/null 2>&1
-    sudo systemctl restart systemd-resolved
-    sudo systemctl restart chronyd
-    sudo systemctl restart fail2ban
-
-    info "Done."
-}
-
-cmd_doctor() {
-    info "Checking system status..."
-    echo ""
-
-    # Shell
-    local shell_ok="no"
-    [[ "$SHELL" == */zsh ]] && shell_ok="yes"
-    echo "  Shell (zsh): $shell_ok ($SHELL)"
-
-    # Services
-    for svc in sshd firewalld tailscaled fail2ban chronyd opensnitch; do
-        local status
-        status=$(systemctl is-active "$svc" 2>/dev/null || echo "not found")
-        echo "  Service ($svc): $status"
-    done
-
-    # SELinux
-    echo "  SELinux: $(getenforce 2>/dev/null || echo 'unknown')"
-
-    # DNS
-    local dns
-    dns=$(resolvectl status 2>/dev/null | grep "Current DNS Server" | head -1 | awk '{print $NF}')
-    echo "  DNS: ${dns:-unknown}"
-
-    # Tools
-    for tool in sway ghostty starship nvim tmux bat eza zoxide fzf btop; do
-        if command -v "$tool" > /dev/null 2>&1; then
-            echo "  Tool ($tool): installed"
-        else
-            echo "  Tool ($tool): MISSING"
-        fi
-    done
-
-    echo ""
-    info "Done."
-}
-
-cmd_help() {
-    cat <<'EOF'
-dot - dotfiles management
+usage() {
+	cat <<'EOF'
+dot - dotfiles management for Fedora/Sway
 
 Usage:
-  dot <command>
+  dot <command> [subcommand] [options]
 
-Commands:
-  update      Update system packages and manually-managed tools
-  stow        Link dotfiles into ~/.config
-  system      Install system configs (/etc) — requires sudo
-  doctor      Check system status and installed tools
-  edit        Open dotfiles in $EDITOR
-  help        Show this help
+Core workflow:
+  dot init [--profile <profile>] [--yes] [--dry-run] [--no-firefox] [--no-git]
+  dot update                         Update system packages and tools
+  dot stow [--profile <profile>]     Link dotfiles into ~/.config
+  dot system                         Install system configs (/etc) — requires sudo
+  dot repos                          Configure third-party repositories
+  dot doctor                         Check system status and installed tools
+
+Profile:
+  dot profile set <base|personal>
+  dot profile get
+  dot profile show
+
+Integrations:
+  dot git setup [--name <n>] [--email <e>] [--default-branch <b>]
+                [--signing-key <path>] [--enable-signing|--disable-signing] [--yes]
+  dot git status
+  dot git signing status             Show signing configuration
+  dot git signing enable [key-path]  Enable SSH commit/tag signing
+  dot git signing disable            Disable enforced signing
+  dot git signing key <path>         Set SSH signing key path
+  dot ssh configure [--profile <profile>] [--dry-run] [--yes]
+  dot ssh sync-yubikey-keys --slot <primary|backup> [--dry-run] [--yes]
+  dot ssh status
+  dot firefox sync [--dry-run] [--yes]
+  dot theme current|list|set <name>|render
+  dot wallpaper sync [--dry-run]
+  dot wallpaper list
+  dot wallpaper set [path] [--pick|--random] [--dry-run]
+
+Packages:
+  dot packages sync [--profile <profile>]
+  dot packages check [--profile <profile>]
+  dot packages list [--profile <profile>]
+
+Quality:
+  dot qa                             Run local QA checks
+  dot security [--history] [--warn-sast]
+  dot sast [--strict]
+
+Utility:
+  dot link                           Link dot into ~/.local/bin
+  dot unlink                         Remove ~/.local/bin/dot symlink
+  dot edit                           Open dotfiles directory in $EDITOR
+  dot help                           Show this help
 
 Examples:
-  dot update
-  dot doctor
-  dot stow
+  dot profile set personal
+  dot init --profile personal
+  dot stow --profile personal
+  dot git signing status
+  dot ssh configure --profile personal
+  dot wallpaper set --pick
+  dot firefox sync --dry-run
 EOF
 }
 
+resolve_profile_arg() {
+	local requested_profile="$1"
+	if [[ -z "$requested_profile" ]]; then
+		dot_profile_get
+		return 0
+	fi
+
+	if ! dot_profile_is_valid "$requested_profile"; then
+		error "Invalid profile '$requested_profile'. Use: base, personal"
+		return 1
+	fi
+
+	printf "%s\n" "$requested_profile"
+}
+
+cmd_profile() {
+	local action="${1:-}"
+	case "$action" in
+	set)
+		shift
+		dot_profile_set "${1:-}"
+		;;
+	get)
+		dot_profile_get
+		;;
+	show)
+		dot_profile_show
+		;;
+	*)
+		error "Usage: dot profile set <base|personal> | get | show"
+		return 1
+		;;
+	esac
+}
+
+cmd_stow() {
+	local requested_profile=""
+	local assume_yes=false
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		--profile)
+			shift
+			requested_profile="${1:-}"
+			;;
+		--yes)
+			assume_yes=true
+			;;
+		-h | --help)
+			cat <<'EOF'
+Usage: dot stow [options]
+
+Options:
+  --profile <base|personal>
+  --yes
+EOF
+			return 0
+			;;
+		*)
+			error "Unknown option for dot stow: $1"
+			return 1
+			;;
+		esac
+		shift
+	done
+
+	local profile
+	profile="$(resolve_profile_arg "$requested_profile")" || return 1
+
+	dot_stow_apply "$profile" "$assume_yes"
+}
+
+cmd_update() {
+	info "Updating system packages..."
+	sudo dnf update -y
+
+	info ""
+	local profile
+	profile="$(dot_profile_get)"
+	dot_packages_sync "$profile"
+
+	info ""
+	info "Updating Flatpak apps..."
+	dot_flatpak_update
+
+	info ""
+	info "Re-deploying stow packages..."
+	dot_stow_apply "$profile"
+
+	info ""
+	info "Done."
+}
+
+cmd_repos() {
+	info "Configuring third-party repositories..."
+
+	# Flatpak + Flathub
+	if ! command -v flatpak >/dev/null 2>&1; then
+		info "Installing Flatpak..."
+		sudo dnf install -y flatpak
+	fi
+	if ! flatpak remotes | grep -q flathub; then
+		info "Adding Flathub repository..."
+		flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+		info "  ADDED: Flathub"
+	else
+		info "  OK: Flathub"
+	fi
+
+	# RPM repos
+	local repo_configs=(
+		"1password:https://downloads.1password.com/linux/keys/1password.asc"
+		"sublime-text:https://download.sublimetext.com/sublimehq-rpm-pub.gpg"
+		"dropbox:https://linux.dropbox.com/fedora/rpm-public-key.asc"
+	)
+
+	for entry in "${repo_configs[@]}"; do
+		local repo_name="${entry%%:*}"
+		local gpg_url="${entry#*:}"
+		local repo_file="/etc/yum.repos.d/${repo_name}.repo"
+
+		if [[ ! -f "$repo_file" ]]; then
+			if [[ -f "$DOTFILES_DIR/etc/yum.repos.d/${repo_name}.repo" ]]; then
+				info "Adding ${repo_name} repository..."
+				sudo rpm --import "$gpg_url" 2>/dev/null || true
+				sudo cp "$DOTFILES_DIR/etc/yum.repos.d/${repo_name}.repo" "$repo_file"
+				info "  ADDED: ${repo_name}"
+			fi
+		else
+			info "  OK: ${repo_name}"
+		fi
+	done
+
+	info "Done."
+}
+
+cmd_system() {
+	info "Installing system configs..."
+
+	# Set up third-party repos first
+	cmd_repos
+
+	local configs=(
+		"etc/sysctl.d/90-hardening.conf:/etc/sysctl.d/90-hardening.conf"
+		"etc/systemd/resolved.conf.d/quad9.conf:/etc/systemd/resolved.conf.d/quad9.conf"
+		"etc/chrony.conf:/etc/chrony.conf"
+		"etc/fail2ban/jail.local:/etc/fail2ban/jail.local"
+		"etc/greetd/config.toml:/etc/greetd/config.toml"
+		"etc/systemd/system/sshd.service.d/tailscale.conf:/etc/systemd/system/sshd.service.d/tailscale.conf"
+	)
+
+	for entry in "${configs[@]}"; do
+		local src="${entry%%:*}"
+		local dst="${entry##*:}"
+		if [[ -f "$DOTFILES_DIR/$src" ]]; then
+			sudo mkdir -p "$(dirname "$dst")"
+			sudo cp "$DOTFILES_DIR/$src" "$dst"
+			echo "  INSTALLED: $dst"
+		fi
+	done
+
+	info "Reloading services..."
+	sudo sysctl --system >/dev/null 2>&1
+	sudo systemctl daemon-reload
+	sudo systemctl restart systemd-resolved
+	sudo systemctl restart chronyd
+	sudo systemctl restart fail2ban
+
+	info "Done."
+}
+
+cmd_doctor() {
+	info "Checking system status..."
+	echo ""
+
+	# Profile
+	local profile
+	profile="$(dot_profile_get)"
+	echo "  Profile: $profile"
+
+	# Shell
+	local shell_ok="no"
+	[[ "$SHELL" == */zsh ]] && shell_ok="yes"
+	echo "  Shell (zsh): $shell_ok ($SHELL)"
+
+	# Services
+	for svc in sshd firewalld tailscaled fail2ban chronyd opensnitch; do
+		local status
+		status=$(systemctl is-active "$svc" 2>/dev/null || echo "not found")
+		echo "  Service ($svc): $status"
+	done
+
+	# SELinux
+	echo "  SELinux: $(getenforce 2>/dev/null || echo 'unknown')"
+
+	# DNS
+	local dns
+	dns=$(resolvectl status 2>/dev/null | grep "Current DNS Server" | head -1 | awk '{print $NF}')
+	echo "  DNS: ${dns:-unknown}"
+
+	# Tools
+	for tool in sway ghostty starship nvim tmux bat eza zoxide fzf btop yt-dlp gallery-dl; do
+		if command -v "$tool" >/dev/null 2>&1; then
+			echo "  Tool ($tool): installed"
+		else
+			echo "  Tool ($tool): MISSING"
+		fi
+	done
+
+	# SSH
+	if [[ -f "$HOME/.ssh/config" ]]; then
+		echo "  SSH config: present"
+	else
+		echo "  SSH config: MISSING (run: dot ssh configure)"
+	fi
+
+	# Git
+	local git_name
+	git_name="$(git config --global --get user.name 2>/dev/null || true)"
+	echo "  Git user.name: ${git_name:-<unset>}"
+
+	echo ""
+	info "Done."
+}
+
+link_dot() {
+	local target="$HOME/.local/bin/dot"
+	mkdir -p "$(dirname "$target")"
+	ln -sfn "$DOTFILES_DIR/dot" "$target"
+	info "Linked dot to $target"
+}
+
+unlink_dot() {
+	local target="$HOME/.local/bin/dot"
+	if [[ -L "$target" ]]; then
+		rm "$target"
+		info "Removed $target"
+		return 0
+	fi
+	warn "No dot symlink at $target"
+}
+
 cmd_edit() {
-    "${EDITOR:-nvim}" "$DOTFILES_DIR"
+	"${EDITOR:-nvim}" "$DOTFILES_DIR"
 }
 
 main() {
-    local command="${1:-help}"
-    case "$command" in
-        update)  cmd_update ;;
-        stow)    cmd_stow ;;
-        system)  cmd_system ;;
-        doctor)  cmd_doctor ;;
-        edit)    cmd_edit ;;
-        help|-h|--help) cmd_help ;;
-        *) error "Unknown command: $command"; cmd_help; exit 1 ;;
-    esac
+	local command="${1:-help}"
+	case "$command" in
+	-h | --help | help)
+		usage
+		;;
+	profile)
+		shift
+		cmd_profile "$@"
+		;;
+	stow)
+		shift
+		cmd_stow "$@"
+		;;
+	update)
+		cmd_update
+		;;
+	system)
+		cmd_system
+		;;
+	repos)
+		cmd_repos
+		;;
+	doctor)
+		cmd_doctor
+		;;
+	git)
+		shift
+		dot_cmd_git "$@"
+		;;
+	ssh)
+		shift
+		dot_cmd_ssh "$@"
+		;;
+	firefox)
+		shift
+		dot_cmd_firefox "$@"
+		;;
+	theme)
+		shift
+		dot_cmd_theme "$@"
+		;;
+	wallpaper)
+		shift
+		dot_cmd_wallpaper "$@"
+		;;
+	init)
+		shift
+		dot_cmd_init "$@"
+		;;
+	packages)
+		shift
+		dot_cmd_packages "$@"
+		;;
+	qa)
+		shift
+		bash "$DOTFILES_DIR/scripts/local-qa.sh" "$@"
+		;;
+	security)
+		shift
+		bash "$DOTFILES_DIR/scripts/local-security.sh" "$@"
+		;;
+	sast)
+		shift
+		bash "$DOTFILES_DIR/scripts/local-sast.sh" "$@"
+		;;
+	link)
+		link_dot
+		;;
+	unlink)
+		unlink_dot
+		;;
+	edit)
+		cmd_edit
+		;;
+	*)
+		usage
+		error "Unknown command: $command"
+		exit 1
+		;;
+	esac
 }
 
 main "$@"

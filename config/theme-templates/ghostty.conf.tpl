@@ -1,0 +1,11 @@
+font-family = IosevkaTerm Nerd Font Mono
+font-size = 18
+theme = {{ ghostty_theme_name }}
+gtk-titlebar = false
+mouse-hide-while-typing = true
+copy-on-select = clipboard
+background = {{ background }}
+foreground = {{ foreground }}
+cursor-color = {{ cursor }}
+selection-background = {{ selection_background }}
+selection-foreground = {{ selection_foreground }}

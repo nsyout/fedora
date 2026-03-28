@@ -1,6 +1,329 @@
 #!/usr/bin/env zsh
 
 # =============================================================================
+# noisyoutput.com content management
+# =============================================================================
+
+# Main entry point: nsy [create|manage|sync]
+nsy() {
+    local HUGO_DIR="${NSY_HUGO_DIR:-$HOME/projects/personal/noisyoutput.com}"
+
+    if [[ ! -d "$HUGO_DIR" ]]; then
+        echo "Error: Hugo directory not found: $HUGO_DIR"
+        echo "Set NSY_HUGO_DIR to override."
+        return 1
+    fi
+
+    local subcommand="$1"
+
+    # If no subcommand, show menu
+    if [[ -z "$subcommand" ]]; then
+        subcommand=$(printf "Create\nManage\nSync" | fzf --prompt="nsy > " --height=10)
+        [[ -z "$subcommand" ]] && { echo "Cancelled."; return 1; }
+    fi
+
+    case "$subcommand" in
+        create|c|"Create")
+            _nsy_create "$HUGO_DIR"
+            ;;
+        manage|m|"Manage")
+            _nsy_manage "$HUGO_DIR"
+            ;;
+        sync|s|"Sync")
+            _nsy_sync "$HUGO_DIR"
+            ;;
+        note|writing|page)
+            _nsy_create "$HUGO_DIR" "$1"
+            ;;
+        *)
+            echo "Unknown command: $subcommand"
+            echo "Usage: nsy [create|manage|sync|note|writing|page]"
+            return 1
+            ;;
+    esac
+}
+
+# Create new content
+_nsy_create() {
+    local hugo_dir="$1"
+    local type="$2"
+    local name hugo_path content_file
+
+    if [[ -z "$type" ]]; then
+        type=$(printf "note\npage\nwriting" | fzf --prompt="Content type: " --height=10)
+        [[ -z "$type" ]] && { echo "Cancelled."; return 1; }
+    fi
+
+    case "$type" in
+        note|notes) type="note" ;;
+        writing) ;;
+        page) ;;
+        *)
+            echo "Error: Type must be 'note', 'writing', or 'page'"
+            return 1
+            ;;
+    esac
+
+    echo -n "Name (slug): "
+    read name
+    [[ -z "$name" ]] && { echo "Cancelled."; return 1; }
+
+    local note_type=""
+    case "$type" in
+        note)
+            hugo_path="notes/$name.md"
+            note_type=$(printf "link\nnote\nquote" | fzf --prompt="Note type: " --height=10)
+            [[ -z "$note_type" ]] && { echo "Cancelled."; return 1; }
+            ;;
+        writing) hugo_path="writing/$name.md" ;;
+        page)    hugo_path="$name.md" ;;
+    esac
+
+    cd "$hugo_dir" || return 1
+    content_file="content/$hugo_path"
+
+    echo "Creating: $hugo_path"
+    hugo new "$hugo_path" || { echo "Error: Failed to create content"; return 1; }
+
+    # Ensure draft = true in frontmatter
+    if grep -qE "^draft[[:space:]]*=" "$content_file"; then
+        sed -i -E 's/^draft[[:space:]]*=.*/draft = true/' "$content_file"
+    else
+        sed -i -E '/^title[[:space:]]*=/a draft = true' "$content_file"
+    fi
+
+    if [[ -n "$note_type" ]]; then
+        sed -i -E "s/^note_type[[:space:]]*=.*/note_type = '$note_type'/" "$content_file"
+    fi
+
+    echo "Frontmatter:"
+    head -10 "$content_file"
+
+    local done=false
+    local hugo_pid
+
+    while [[ "$done" == "false" ]]; do
+        ${EDITOR:-nvim} "$content_file"
+
+        echo "Starting preview server..."
+        hugo serve --buildDrafts --quiet &
+        hugo_pid=$!
+        sleep 2
+
+        xdg-open "http://localhost:1313" 2>/dev/null
+
+        echo "Preview opened at http://localhost:1313"
+        echo ""
+
+        local action=$(printf "Discard\nKeep editing\nPublish\nSave as draft" | fzf --prompt="Action: " --height=10)
+
+        kill $hugo_pid 2>/dev/null
+        wait $hugo_pid 2>/dev/null
+
+        case "$action" in
+            "Save as draft")
+                git add "$content_file"
+                echo "Staged as draft. Run 'nsy sync' to commit and push."
+                done=true
+                ;;
+            "Publish")
+                sed -i -E 's/^draft[[:space:]]*=[[:space:]]*true/draft = false/' "$content_file"
+                git add "$content_file"
+                echo "Staged for publish. Run 'nsy sync' to commit and push."
+                done=true
+                ;;
+            "Keep editing")
+                ;;
+            "Discard"|"")
+                echo -n "Delete the file? [y/N] "
+                read confirm
+                if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                    rm -f "$content_file"
+                    echo "Discarded."
+                else
+                    echo "File kept at: $content_file"
+                fi
+                done=true
+                ;;
+        esac
+    done
+}
+
+# Manage all content (edit, delete, unpublish)
+_nsy_manage() {
+    local hugo_dir="$1"
+
+    cd "$hugo_dir" || return 1
+
+    local filter=$(printf "All\nDrafts\nPublished" | fzf --prompt="Show: " --height=10)
+    [[ -z "$filter" ]] && { echo "Cancelled."; return 1; }
+
+    while true; do
+        local files
+        case "$filter" in
+            "All")
+                files=$(find content -name "*.md" -type f 2>/dev/null | sort)
+                ;;
+            "Drafts")
+                files=$(grep -rlE "^draft[[:space:]]*=[[:space:]]*true" content/ 2>/dev/null | sort)
+                ;;
+            "Published")
+                files=$(find content -name "*.md" -type f 2>/dev/null | while read f; do
+                    if ! grep -qE "^draft[[:space:]]*=[[:space:]]*true" "$f"; then
+                        echo "$f"
+                    fi
+                done | sort)
+                ;;
+        esac
+
+        if [[ -z "$files" ]]; then
+            echo "No content found."
+            return 0
+        fi
+
+        local selected=$(echo "$files" | fzf --prompt="Select content (Esc to exit): " --height=20 --preview="head -30 {}")
+        [[ -z "$selected" ]] && { echo "Done."; return 0; }
+
+        echo "Selected: $selected"
+
+        local name=$(basename "$selected" .md)
+        local is_draft=$(grep -qE "^draft[[:space:]]*=[[:space:]]*true" "$selected" && echo "yes" || echo "no")
+
+        local actions="Delete\nEdit\nPreview"
+        if [[ "$is_draft" == "yes" ]]; then
+            actions="$actions\nPublish"
+        else
+            actions="$actions\nUnpublish"
+        fi
+
+        local action=$(echo -e "$actions" | sort | fzf --prompt="Action: " --height=10)
+        [[ -z "$action" ]] && { echo "Cancelled."; return 1; }
+
+        case "$action" in
+            "Delete")
+                echo -n "Delete '$name'? [y/N] "
+                read confirm
+                if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                    rm -f "$selected"
+                    git add "$selected"
+                    echo "Staged deletion. Run 'nsy sync' to commit and push."
+                else
+                    echo "Cancelled."
+                fi
+                ;;
+            "Edit")
+                ${EDITOR:-nvim} "$selected"
+                echo -n "Stage changes? [y/N] "
+                read confirm
+                if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                    local timestamp=$(date -Iseconds)
+                    if grep -qE "^lastmod[[:space:]]*=" "$selected"; then
+                        sed -i -E "s/^lastmod[[:space:]]*=.*/lastmod = $timestamp/" "$selected"
+                    else
+                        sed -i -E "/^date[[:space:]]*=/a lastmod = $timestamp" "$selected"
+                    fi
+                    git add "$selected"
+                    echo "Staged (lastmod updated). Run 'nsy sync' to commit and push."
+                fi
+                ;;
+            "Preview")
+                hugo serve --buildDrafts --quiet &
+                local hugo_pid=$!
+                sleep 2
+                xdg-open "http://localhost:1313" 2>/dev/null
+                echo "Preview opened at http://localhost:1313"
+                echo "Press enter when done..."
+                read
+                kill $hugo_pid 2>/dev/null
+                wait $hugo_pid 2>/dev/null
+                ;;
+            "Publish")
+                _nsy_publish_file "$selected" "$name"
+                ;;
+            "Unpublish")
+                sed -i -E 's/^draft[[:space:]]*=[[:space:]]*false/draft = true/' "$selected"
+                git add "$selected"
+                echo "Staged unpublish. Run 'nsy sync' to commit and push."
+                ;;
+        esac
+    done
+}
+
+# Sync - commit and push all staged changes
+_nsy_sync() {
+    local hugo_dir="$1"
+
+    cd "$hugo_dir" || return 1
+
+    if git diff --cached --quiet; then
+        echo "Nothing to sync (no staged changes)."
+        git status --short
+        return 0
+    fi
+
+    echo "Staged changes:"
+    git diff --cached --name-status
+    echo ""
+
+    echo -n "Commit message: "
+    read msg
+    [[ -z "$msg" ]] && { echo "Cancelled."; return 1; }
+
+    git commit -m "$msg"
+    git push origin
+
+    echo "Synced!"
+}
+
+# Helper to publish a draft file
+_nsy_publish_file() {
+    local file="$1"
+    local name="$2"
+
+    sed -i -E 's/^draft[[:space:]]*=[[:space:]]*true/draft = false/' "$file"
+    git add "$file"
+    echo "Staged for publish. Run 'nsy sync' to commit and push."
+}
+
+# =============================================================================
+# Trash management (uses trash-cli)
+# =============================================================================
+
+trash() {
+    if ! command -v trash-put >/dev/null 2>&1; then
+        echo "trash-put not found. Install: sudo dnf install trash-cli" >&2
+        return 1
+    fi
+    trash-put "$@"
+}
+
+trash-clean() {
+    local days=${1:-7}
+    echo "Emptying trash older than $days days..."
+    if command -v trash-empty >/dev/null 2>&1; then
+        trash-empty "$days"
+    else
+        echo "trash-empty command not found"
+    fi
+}
+
+trash-size() {
+    du -sh ~/.local/share/Trash 2>/dev/null || echo "Trash is empty"
+}
+
+trash-status() {
+    echo "=== Trash Status ==="
+    trash-size
+    echo ""
+    echo "Recent items:"
+    if command -v trash-list >/dev/null 2>&1; then
+        trash-list | head -5
+    else
+        echo "trash-list command not found"
+    fi
+}
+
+# =============================================================================
 # Archive & compression utilities
 # =============================================================================
 

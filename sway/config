@@ -28,21 +28,21 @@ set $rofi_cmd rofi \
 # Shows a combined list of the applications with desktop files and
 # executables from PATH.
 # TODO: add window with the next release of rofi-wayland
-set $menu $rofi_cmd -show combi -combi-modes drun#run -modes combi
+set $menu $rofi_cmd -show combi -combi-modes drun#run -modes "combi,window,ssh"
 
 ### Layout defaults
+default_border pixel 2
 default_orientation auto
-gaps inner 8
-gaps outer 8
+gaps inner 0
+gaps outer 0
 
 ### Cursor
 seat seat0 xcursor_theme Adwaita 24
 
 ### Output configuration
 #
-# Default wallpaper (more resolutions are available in /usr/share/backgrounds/sway/)
-# Requires: desktop-backgrounds-compat, swaybg, jxl-pixbuf-loader
-output * bg /usr/share/backgrounds/default.jxl fill
+# Wallpaper — managed by `dot wallpaper set`, falls back to Fedora default
+output * bg `cat ~/.local/state/dot/wallpaper 2>/dev/null || echo /usr/share/backgrounds/default.jxl` fill
 output DP-1 scale 1.5
 #
 # Example configuration:
@@ -65,18 +65,10 @@ output DP-1 scale 1.5
 # resumed. It will also lock your screen before your computer goes to sleep.
 
 ### Input configuration
-#
-# Example configuration:
-#
-#   input "2:14:SynPS/2_Synaptics_TouchPad" {
-#       dwt enabled
-#       tap enabled
-#       natural_scroll enabled
-#       middle_emulation enabled
-#   }
-#
-# You can get the names of your inputs by running: swaymsg -t get_inputs
-# Read `man 5 sway-input` for more information about this section.
+input type:pointer {
+    accel_profile flat
+    pointer_accel 0.0
+}
 
 ### Key bindings
 #
@@ -89,7 +81,7 @@ output DP-1 scale 1.5
     bindsym $mod+w kill
 
     # Start your launcher
-    bindsym $mod+d exec $menu
+    bindsym $mod+space exec $menu
 
     # Drag floating windows by holding down $mod and left mouse button.
     # Resize them with right mouse button + $mod.
@@ -99,7 +91,7 @@ output DP-1 scale 1.5
     floating_modifier $mod normal
 
     # Reload the configuration file
-    bindsym $mod+Shift+c reload
+    bindsym $mod+Shift+r reload
 
     # Exit sway (logs you out of your Wayland session)
     bindsym $mod+Shift+e exec swaynag -t warning -m 'You pressed the exit shortcut. Do you really want to exit sway? This will end your Wayland session.' -B 'Yes, exit sway' 'swaymsg exit'
@@ -167,7 +159,7 @@ output DP-1 scale 1.5
     bindsym $mod+Shift+space floating toggle
 
     # Swap focus between the tiling area and the floating area
-    bindsym $mod+space focus mode_toggle
+    bindsym $mod+d focus mode_toggle
 
     # Move focus to the parent container
     bindsym $mod+a focus parent

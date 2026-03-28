@@ -1,0 +1,59 @@
+{
+  "extractor": {
+    "base-directory": "~/media/external",
+    "cookies": ["firefox"],
+    "browser": "firefox",
+    "user-agent": "browser",
+    "skip": true,
+    "parent-directory": false,
+    "archive": "~/media/external/.media-archives/gallery-dl/archive.sqlite3",
+    "sleep-request": "1-3",
+    "keywords-default": "",
+    "path-restrict": {
+      "\\": "-",
+      "/": "-",
+      "|": "-",
+      ":": "-",
+      "\"": "",
+      "'": "",
+      "\u201c\u201d\u2018\u2019": "",
+      "?": "",
+      "*": "",
+      "<": "",
+      ">": ""
+    },
+    "path-remove": "\u0000-\u001f\u007f",
+    "directory": ["{category!g}"],
+    "filename": "{date:%Y%m%d}-{post_id}-{id}-{num}.{extension}",
+    "instagram": {
+      "archive": "~/media/external/.media-archives/gallery-dl/instagram.sqlite3",
+      "directory": ["instagram", "{username!g}"],
+      "filename": "{date:%Y%m%d}-{post_shortcode}-{num}.{extension}"
+    },
+    "reddit": {
+      "directory": {
+        "subreddit_type == 'user'": ["reddit", "u-{author!g}"],
+        "": ["reddit", "{subreddit!g}"]
+      },
+      "filename": "{date:%Y%m%d}-{author!g}-{id}-{title!g:[0:80]}-{num}.{extension}"
+    },
+    "twitter": {
+      "directory": ["twitter", "{user[nick]|author[nick]|user[name]|author[name]!g}"],
+      "filename": "{date:%Y%m%d}-{tweet_id}-{content!g:[0:80]}-{num}.{extension}"
+    },
+    "bluesky": {
+      "directory": ["bluesky", "{author[handle]|author[displayName]!g}"],
+      "filename": "{date:%Y%m%d}-{post_id}-{text!g:[0:80]}-{num}.{extension}"
+    },
+    "directlink": {
+      "filename": "{filename|id}-{num}.{extension}"
+    },
+    "pinterest": {
+      "directory": {
+        "board and board.get('name')": ["pinterest", "{board[owner][username]|pinner[username]|owner[username]|username!g}", "{board[name]!g}"],
+        "": ["pinterest", "{pinner[username]|owner[username]|username!g}", "unorganized-ideas"]
+      },
+      "filename": "{pin_id|post_id|id}-{title|grid_title|description|auto_alt_text!g:[0:80]}-{num}.{extension}"
+    }
+  }
+}

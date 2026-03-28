@@ -1,0 +1,8 @@
+{
+  "extractor": {
+    "sleep-request": "2-4"
+  },
+  "downloader": {
+    "part": false
+  }
+}
