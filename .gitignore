@@ -1,5 +1,43 @@
-zsh/plugins/zsh-syntax-highlighting
-zsh/.zsh_history
-zsh/.zcompdump
-opencode/node_modules
-opencode/sounds
+.zsh_history
+.zcompdump
+.zcompdump-*
+*.zwc
+.DS_Store
+**/.DS_Store
+
+# External zsh plugins (cloned by dot init / dot update)
+**/zsh/plugins/zsh-syntax-highlighting/
+**/zsh/plugins/zsh-completions/
+**/zsh/plugins/zsh-you-should-use/
+
+# Zsh session restore data (runtime, auto-generated)
+**/zsh/.zsh_sessions/
+
+# Claude Code - session data and local-only config
+.claude/memory/
+.claude/todos/
+.claude/plans/
+.claude/*.jsonl
+.claude/settings.local.json
+
+# Tmux plugins (installed by TPM)
+**/tmux/plugins/
+
+# Theme state (runtime, falls back to flexoki-dark if absent)
+themes/current
+
+# Secrets and credentials
+*.pem
+*.key
+.env
+.env.*
+**/.wireguard/
+
+# Local overrides
+*.local
+!**/fail2ban/jail.local
+**/gallery-dl/config.local.json
+
+# Neovim persistent undo (per-machine
+  state)
+**/.undodir/

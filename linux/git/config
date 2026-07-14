@@ -1,0 +1,3 @@
+# Reserved for base/personal-wide git settings.
+# User identity, signing, and ignores live in ~/.config-local/git/user
+# (managed by `dot git setup`).

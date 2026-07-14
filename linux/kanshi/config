@@ -1,0 +1,13 @@
+# kanshi — dynamic output configuration for Wayland
+# Profiles are auto-selected based on connected displays.
+# Run `swaymsg -t get_outputs` to find make/model/serial values.
+
+# Framework 13 — internal 2.8K panel
+profile laptop {
+    output "BOE NE135A1M-NY1 Unknown" scale 1.75
+}
+
+# Desktop — BenQ RD280UA 3840x2560
+profile desktop {
+    output "BNQ BenQ RD280UA 66S0012001Q" scale 1.5
+}

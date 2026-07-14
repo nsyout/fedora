@@ -1,3 +1,0 @@
-# Base SSH defaults
-Host *
-    IdentitiesOnly yes

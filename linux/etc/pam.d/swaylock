@@ -1,0 +1,8 @@
+#
+# PAM configuration file for the swaylock screen locker.
+#
+# Try password first; if empty or wrong, fall through to fingerprint.
+#
+auth sufficient pam_unix.so nullok
+auth sufficient pam_fprintd.so
+auth required pam_deny.so

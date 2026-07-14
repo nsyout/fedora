@@ -1,0 +1,11 @@
+# Base SSH defaults
+Host *
+    IdentitiesOnly yes     # only offer keys explicitly listed via IdentityFile, not every key in ~/.ssh/ or the agent
+    ForwardAgent no        # don't let remote servers use your local agent to auth elsewhere
+    HashKnownHosts yes     # hash hostnames in known_hosts so a compromised server can't read your connection history
+
+# Personal SSH config
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/personal_primary

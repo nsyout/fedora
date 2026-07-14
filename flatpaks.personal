@@ -1,8 +1,0 @@
-# Flatpak apps — personal profile
-# Format: flathub app ID, one per line
-
-com.spotify.Client
-md.obsidian.Obsidian
-com.discordapp.Discord
-com.slack.Slack
-com.dropbox.Client

@@ -21,7 +21,7 @@ chosen=$(printf '%s\n' "${entries[@]}" | rofi -dmenu -p "System" -theme ~/.confi
 case "$chosen" in
 *"Theme"*)
 	# Show theme picker
-	current=$(cat "$DOTFILES/config/theme/current-theme")
+	current=$(cat "$DOTFILES/themes/current")
 	themes=$(find "$DOTFILES/themes/" -maxdepth 1 -mindepth 1 -printf '%f\n' | sort)
 	selected=$(echo "$themes" | rofi -dmenu -p "Theme (current: $current)" -theme ~/.config/rofi/theme.rasi -i)
 	[[ -n "$selected" ]] && "$DOTFILES/dot" theme set "$selected"

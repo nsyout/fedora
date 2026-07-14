@@ -1,0 +1,99 @@
+@define-color bg rgba(16, 15, 15, 0.92);
+@define-color text #CECDC3;
+@define-color blue #61A0D7;
+@define-color red #D14D41;
+@define-color yellow #EBC06D;
+@define-color gray #575653;
+
+* {
+  border: none;
+  border-radius: 0;
+  font-family: "IosevkaTerm Nerd Font", "Noto Sans Mono", monospace;
+  font-size: 15px;
+  min-height: 0;
+}
+
+window#waybar {
+  background: rgba(206, 205, 195, 0.08);
+  color: @text;
+}
+
+/* --- Workspaces --- */
+
+#workspaces {
+  padding: 0 4px;
+}
+
+#workspaces button {
+  all: unset;
+  min-width: 22px;
+  min-height: 6px;
+  margin: 10px 3px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(206, 205, 195, 0.2);
+}
+
+#workspaces button.focused {
+  background: @blue;
+}
+
+#workspaces button.urgent {
+  background: @red;
+}
+
+/* --- Mode --- */
+
+#mode {
+  padding: 2px 12px;
+  color: @yellow;
+}
+
+/* --- Common module padding --- */
+
+#scratchpad,
+#tray,
+#idle_inhibitor,
+#cpu,
+#memory,
+#temperature,
+#bluetooth,
+#custom-network,
+#pulseaudio,
+#battery,
+#clock {
+  padding: 2px 10px;
+  color: @text;
+}
+
+#clock {
+  font-weight: 700;
+}
+
+/* --- State colors --- */
+
+#workspaces button.urgent,
+#temperature.critical,
+#pulseaudio.muted,
+#custom-network.disconnected,
+#battery.warning {
+  color: @red;
+}
+
+#battery.critical {
+  color: @yellow;
+}
+
+/* --- Hover effects --- */
+
+#cpu:hover,
+#memory:hover,
+#temperature:hover,
+#bluetooth:hover,
+#custom-network:hover,
+#pulseaudio:hover,
+#battery:hover,
+#clock:hover,
+#idle_inhibitor:hover {
+  background: rgba(206, 205, 195, 0.08);
+}

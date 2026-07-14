@@ -16,68 +16,93 @@ resolve_script_path() {
 
 DOTFILES_DIR="${DOTFILES_DIR:-$(resolve_script_path)}"
 
+# --------------------------------------------------------------------------
+# Shared libraries
+# --------------------------------------------------------------------------
+
 # shellcheck disable=SC1091
 source "$DOTFILES_DIR/scripts/lib/common.sh"
 # shellcheck disable=SC1091
-source "$DOTFILES_DIR/scripts/lib/profile.sh"
+source "$DOTFILES_DIR/scripts/lib/platform.sh"
 # shellcheck disable=SC1091
-source "$DOTFILES_DIR/scripts/lib/stow.sh"
-# shellcheck disable=SC1091
-source "$DOTFILES_DIR/scripts/lib/cmd_git.sh"
-# shellcheck disable=SC1091
-source "$DOTFILES_DIR/scripts/lib/cmd_ssh.sh"
-# shellcheck disable=SC1091
-source "$DOTFILES_DIR/scripts/lib/cmd_firefox.sh"
+source "$DOTFILES_DIR/scripts/lib/symlink.sh"
 # shellcheck disable=SC1091
 source "$DOTFILES_DIR/scripts/lib/packages.sh"
 # shellcheck disable=SC1091
-source "$DOTFILES_DIR/scripts/lib/cmd_theme.sh"
+source "$DOTFILES_DIR/scripts/lib/plugins.sh"
+
+# Detect platform early -- sets DOT_PLATFORM and DOT_PLATFORM_DIR.
+# Asserts Linux; bails on any other OS.
+dot_platform_detect || exit 1
+
+# --------------------------------------------------------------------------
+# Linux command libraries
+# --------------------------------------------------------------------------
+
+LINUX_LIB="$DOTFILES_DIR/scripts/lib/linux"
+
 # shellcheck disable=SC1091
-source "$DOTFILES_DIR/scripts/lib/cmd_wallpaper.sh"
+source "$LINUX_LIB/cmd_git.sh"
 # shellcheck disable=SC1091
-source "$DOTFILES_DIR/scripts/lib/cmd_init.sh"
+source "$LINUX_LIB/cmd_ssh.sh"
+# shellcheck disable=SC1091
+source "$LINUX_LIB/cmd_firefox.sh"
+# shellcheck disable=SC1091
+source "$LINUX_LIB/cmd_wallpaper.sh"
+# shellcheck disable=SC1091
+source "$LINUX_LIB/cmd_init.sh"
+# shellcheck disable=SC1091
+source "$LINUX_LIB/cmd_display.sh"
+# shellcheck disable=SC1091
+source "$LINUX_LIB/cmd_theme.sh"
+# shellcheck disable=SC1091
+source "$LINUX_LIB/cmd_system.sh"
+# shellcheck disable=SC1091
+source "$LINUX_LIB/cmd_update.sh"
+# shellcheck disable=SC1091
+source "$LINUX_LIB/cmd_doctor.sh"
+
+# --------------------------------------------------------------------------
+# Usage
+# --------------------------------------------------------------------------
 
 usage() {
 	cat <<'EOF'
-dot - dotfiles management for Fedora/Sway
+dot - Linux (Fedora/Sway) dotfiles management
 
 Usage:
   dot <command> [subcommand] [options]
 
 Core workflow:
-  dot init [--profile <profile>] [--yes] [--dry-run] [--no-firefox] [--no-git]
-  dot update                         Update system packages and tools
-  dot stow [--profile <profile>]     Link dotfiles into ~/.config
-  dot system                         Install system configs (/etc) — requires sudo
-  dot repos                          Configure third-party repositories
-  dot doctor                         Check system status and installed tools
-
-Profile:
-  dot profile set <base|personal>
-  dot profile get
-  dot profile show
+  dot init [--yes] [--dry-run]
+  dot symlink                        Link dotfiles into ~/.config
+  dot doctor                         Check system status
+  dot update [--yes]                 Update system + packages + configs
 
 Integrations:
   dot git setup [--name <n>] [--email <e>] [--default-branch <b>]
                 [--signing-key <path>] [--enable-signing|--disable-signing] [--yes]
   dot git status
-  dot git signing status             Show signing configuration
-  dot git signing enable [key-path]  Enable SSH commit/tag signing
-  dot git signing disable            Disable enforced signing
-  dot git signing key <path>         Set SSH signing key path
-  dot ssh configure [--profile <profile>] [--dry-run] [--yes]
+  dot git signing status|enable|disable|key
+  dot ssh configure [--dry-run] [--yes]
   dot ssh sync-yubikey-keys --slot <primary|backup> [--dry-run] [--yes]
   dot ssh status
   dot firefox sync [--dry-run] [--yes]
-  dot theme current|list|set <name>|render
-  dot wallpaper sync [--dry-run]
-  dot wallpaper list
-  dot wallpaper set [path] [--pick|--random] [--dry-run]
+  dot wallpaper sync|list|set [--pick|--random] [--dry-run]
 
 Packages:
-  dot packages sync [--profile <profile>]
-  dot packages check [--profile <profile>]
-  dot packages list [--profile <profile>]
+  dot packages sync|check|list
+
+Plugins:
+  dot plugins sync                   Clone/update external zsh plugins
+  dot plugins list                   Show installed status
+
+Linux:
+  dot display add [--dry-run]        Add kanshi profiles for new displays
+  dot display list                   Show configured display profiles
+  dot system                         Install /etc configs (sudo)
+  dot repos                          Configure third-party repositories
+  dot theme current|list|set <name>|render
 
 Quality:
   dot qa                             Run local QA checks
@@ -89,242 +114,41 @@ Utility:
   dot unlink                         Remove ~/.local/bin/dot symlink
   dot edit                           Open dotfiles directory in $EDITOR
   dot help                           Show this help
-
-Examples:
-  dot profile set personal
-  dot init --profile personal
-  dot stow --profile personal
-  dot git signing status
-  dot ssh configure --profile personal
-  dot wallpaper set --pick
-  dot firefox sync --dry-run
 EOF
 }
 
-resolve_profile_arg() {
-	local requested_profile="$1"
-	if [[ -z "$requested_profile" ]]; then
-		dot_profile_get
-		return 0
-	fi
+# --------------------------------------------------------------------------
+# Shared commands
+# --------------------------------------------------------------------------
 
-	if ! dot_profile_is_valid "$requested_profile"; then
-		error "Invalid profile '$requested_profile'. Use: base, personal"
-		return 1
-	fi
-
-	printf "%s\n" "$requested_profile"
-}
-
-cmd_profile() {
-	local action="${1:-}"
-	case "$action" in
-	set)
-		shift
-		dot_profile_set "${1:-}"
-		;;
-	get)
-		dot_profile_get
-		;;
-	show)
-		dot_profile_show
-		;;
-	*)
-		error "Usage: dot profile set <base|personal> | get | show"
-		return 1
-		;;
-	esac
-}
-
-cmd_stow() {
-	local requested_profile=""
+cmd_symlink() {
 	local assume_yes=false
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
-		--profile)
-			shift
-			requested_profile="${1:-}"
-			;;
 		--yes)
 			assume_yes=true
 			;;
 		-h | --help)
 			cat <<'EOF'
-Usage: dot stow [options]
-
-Options:
-  --profile <base|personal>
-  --yes
+Usage: dot symlink [--yes]
 EOF
 			return 0
 			;;
 		*)
-			error "Unknown option for dot stow: $1"
+			error "Unknown option for dot symlink: $1"
 			return 1
 			;;
 		esac
 		shift
 	done
 
-	local profile
-	profile="$(resolve_profile_arg "$requested_profile")" || return 1
-
-	dot_stow_apply "$profile" "$assume_yes"
+	dot_symlink_apply "$assume_yes"
 }
 
-cmd_update() {
-	info "Updating system packages..."
-	sudo dnf update -y
-
-	info ""
-	local profile
-	profile="$(dot_profile_get)"
-	dot_packages_sync "$profile"
-
-	info ""
-	info "Updating Flatpak apps..."
-	dot_flatpak_update
-
-	info ""
-	info "Re-deploying stow packages..."
-	dot_stow_apply "$profile"
-
-	info ""
-	info "Done."
-}
-
-cmd_repos() {
-	info "Configuring third-party repositories..."
-
-	# Flatpak + Flathub
-	if ! command -v flatpak >/dev/null 2>&1; then
-		info "Installing Flatpak..."
-		sudo dnf install -y flatpak
-	fi
-	if ! flatpak remotes | grep -q flathub; then
-		info "Adding Flathub repository..."
-		flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-		info "  ADDED: Flathub"
-	else
-		info "  OK: Flathub"
-	fi
-
-	# RPM repos
-	local repo_configs=(
-		"1password:https://downloads.1password.com/linux/keys/1password.asc"
-		"sublime-text:https://download.sublimetext.com/sublimehq-rpm-pub.gpg"
-		"dropbox:https://linux.dropbox.com/fedora/rpm-public-key.asc"
-	)
-
-	for entry in "${repo_configs[@]}"; do
-		local repo_name="${entry%%:*}"
-		local gpg_url="${entry#*:}"
-		local repo_file="/etc/yum.repos.d/${repo_name}.repo"
-
-		if [[ ! -f "$repo_file" ]]; then
-			if [[ -f "$DOTFILES_DIR/etc/yum.repos.d/${repo_name}.repo" ]]; then
-				info "Adding ${repo_name} repository..."
-				sudo rpm --import "$gpg_url" 2>/dev/null || true
-				sudo cp "$DOTFILES_DIR/etc/yum.repos.d/${repo_name}.repo" "$repo_file"
-				info "  ADDED: ${repo_name}"
-			fi
-		else
-			info "  OK: ${repo_name}"
-		fi
-	done
-
-	info "Done."
-}
-
-cmd_system() {
-	info "Installing system configs..."
-
-	# Set up third-party repos first
-	cmd_repos
-
-	local configs=(
-		"etc/sysctl.d/90-hardening.conf:/etc/sysctl.d/90-hardening.conf"
-		"etc/systemd/resolved.conf.d/quad9.conf:/etc/systemd/resolved.conf.d/quad9.conf"
-		"etc/chrony.conf:/etc/chrony.conf"
-		"etc/fail2ban/jail.local:/etc/fail2ban/jail.local"
-		"etc/greetd/config.toml:/etc/greetd/config.toml"
-		"etc/systemd/system/sshd.service.d/tailscale.conf:/etc/systemd/system/sshd.service.d/tailscale.conf"
-	)
-
-	for entry in "${configs[@]}"; do
-		local src="${entry%%:*}"
-		local dst="${entry##*:}"
-		if [[ -f "$DOTFILES_DIR/$src" ]]; then
-			sudo mkdir -p "$(dirname "$dst")"
-			sudo cp "$DOTFILES_DIR/$src" "$dst"
-			echo "  INSTALLED: $dst"
-		fi
-	done
-
-	info "Reloading services..."
-	sudo sysctl --system >/dev/null 2>&1
-	sudo systemctl daemon-reload
-	sudo systemctl restart systemd-resolved
-	sudo systemctl restart chronyd
-	sudo systemctl restart fail2ban
-
-	info "Done."
-}
-
-cmd_doctor() {
-	info "Checking system status..."
-	echo ""
-
-	# Profile
-	local profile
-	profile="$(dot_profile_get)"
-	echo "  Profile: $profile"
-
-	# Shell
-	local shell_ok="no"
-	[[ "$SHELL" == */zsh ]] && shell_ok="yes"
-	echo "  Shell (zsh): $shell_ok ($SHELL)"
-
-	# Services
-	for svc in sshd firewalld tailscaled fail2ban chronyd opensnitch; do
-		local status
-		status=$(systemctl is-active "$svc" 2>/dev/null || echo "not found")
-		echo "  Service ($svc): $status"
-	done
-
-	# SELinux
-	echo "  SELinux: $(getenforce 2>/dev/null || echo 'unknown')"
-
-	# DNS
-	local dns
-	dns=$(resolvectl status 2>/dev/null | grep "Current DNS Server" | head -1 | awk '{print $NF}')
-	echo "  DNS: ${dns:-unknown}"
-
-	# Tools
-	for tool in sway ghostty starship nvim tmux bat eza zoxide fzf btop yt-dlp gallery-dl; do
-		if command -v "$tool" >/dev/null 2>&1; then
-			echo "  Tool ($tool): installed"
-		else
-			echo "  Tool ($tool): MISSING"
-		fi
-	done
-
-	# SSH
-	if [[ -f "$HOME/.ssh/config" ]]; then
-		echo "  SSH config: present"
-	else
-		echo "  SSH config: MISSING (run: dot ssh configure)"
-	fi
-
-	# Git
-	local git_name
-	git_name="$(git config --global --get user.name 2>/dev/null || true)"
-	echo "  Git user.name: ${git_name:-<unset>}"
-
-	echo ""
-	info "Done."
-}
+# --------------------------------------------------------------------------
+# Utility commands
+# --------------------------------------------------------------------------
 
 link_dot() {
 	local target="$HOME/.local/bin/dot"
@@ -347,31 +171,31 @@ cmd_edit() {
 	"${EDITOR:-nvim}" "$DOTFILES_DIR"
 }
 
+# --------------------------------------------------------------------------
+# Main dispatch
+# --------------------------------------------------------------------------
+
 main() {
 	local command="${1:-help}"
 	case "$command" in
 	-h | --help | help)
 		usage
 		;;
-	profile)
+	symlink)
 		shift
-		cmd_profile "$@"
+		cmd_symlink "$@"
 		;;
-	stow)
+	init)
 		shift
-		cmd_stow "$@"
+		dot_cmd_init "$@"
 		;;
 	update)
-		cmd_update
-		;;
-	system)
-		cmd_system
-		;;
-	repos)
-		cmd_repos
+		shift
+		dot_cmd_update "$@"
 		;;
 	doctor)
-		cmd_doctor
+		shift
+		dot_cmd_doctor "$@"
 		;;
 	git)
 		shift
@@ -385,22 +209,45 @@ main() {
 		shift
 		dot_cmd_firefox "$@"
 		;;
-	theme)
-		shift
-		dot_cmd_theme "$@"
-		;;
 	wallpaper)
 		shift
 		dot_cmd_wallpaper "$@"
-		;;
-	init)
-		shift
-		dot_cmd_init "$@"
 		;;
 	packages)
 		shift
 		dot_cmd_packages "$@"
 		;;
+	plugins)
+		shift
+		local action="${1:-sync}"
+		case "$action" in
+		sync)
+			dot_plugins_sync
+			;;
+		list)
+			dot_plugins_list
+			;;
+		*)
+			error "Usage: dot plugins <sync|list>"
+			;;
+		esac
+		;;
+	display)
+		shift
+		dot_cmd_display "$@"
+		;;
+	system)
+		dot_cmd_system
+		;;
+	repos)
+		dot_cmd_repos
+		;;
+	theme)
+		shift
+		dot_cmd_theme "$@"
+		;;
+
+	# Quality
 	qa)
 		shift
 		bash "$DOTFILES_DIR/scripts/local-qa.sh" "$@"
@@ -413,6 +260,8 @@ main() {
 		shift
 		bash "$DOTFILES_DIR/scripts/local-sast.sh" "$@"
 		;;
+
+	# Utility
 	link)
 		link_dot
 		;;

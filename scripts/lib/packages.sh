@@ -1,94 +1,163 @@
 #!/usr/bin/env bash
 
-# Tools managed outside of dnf (by update-tools.sh)
-DOT_EXTERNAL_TOOLS="starship lazygit ghostty bluetuith"
+# Linux package management via dnf + Flatpak.
 
-dot_packages_manifest_files() {
-	local profile="$1"
-	local dotfiles_dir="${DOTFILES_DIR:-$HOME/.dotfiles}"
+# --------------------------------------------------------------------------
+# Shared helpers
+# --------------------------------------------------------------------------
 
-	local base_manifest="$dotfiles_dir/packages.base"
-	[[ -f "$base_manifest" ]] && printf "%s\n" "$base_manifest"
-
-	case "$profile" in
-	personal)
-		[[ -f "$dotfiles_dir/packages.personal" ]] && printf "%s\n" "$dotfiles_dir/packages.personal"
-		;;
-	base) ;;
-	*)
-		warn "Unknown profile '$profile', using base packages only"
-		;;
-	esac
-}
-
-dot_packages_read_manifest() {
+dot_packages_read_manifest_lines() {
 	local manifest="$1"
 	while IFS= read -r line; do
-		line="${line%%#*}"             # strip comments
-		line="${line%%$'\r'}"          # strip CR
-		line="$(echo "$line" | xargs)" # trim whitespace
+		line="${line%%#*}"
+		line="${line%%$'\r'}"
+		line="$(echo "$line" | xargs)"
 		[[ -z "$line" ]] && continue
 		printf "%s\n" "$line"
 	done <"$manifest"
 }
 
-dot_packages_list() {
-	local profile="$1"
-	local manifest
-	while IFS= read -r manifest; do
-		[[ -z "$manifest" ]] && continue
-		dot_packages_read_manifest "$manifest"
-	done < <(dot_packages_manifest_files "$profile")
+# --------------------------------------------------------------------------
+# Manifest file resolution
+# --------------------------------------------------------------------------
+
+dot_packages_manifest_file() {
+	printf "%s\n" "$DOT_PLATFORM_DIR/packages"
 }
 
-dot_packages_dnf_list() {
-	local profile="$1"
+# --------------------------------------------------------------------------
+# Package list (for display / check)
+# --------------------------------------------------------------------------
+
+dot_packages_list() {
+	local manifest
+	manifest="$(dot_packages_manifest_file)"
+	[[ -f "$manifest" ]] || {
+		warn "Missing manifest: $manifest"
+		return 1
+	}
+
+	dot_packages_read_manifest_lines "$manifest"
+}
+
+# --------------------------------------------------------------------------
+# Package sync
+# --------------------------------------------------------------------------
+
+dot_packages_sync() {
+	local platform_dir="$DOT_PLATFORM_DIR"
+	local manifest
+	manifest="$(dot_packages_manifest_file)"
+
+	# Tools managed outside of dnf
+	local external_tools="starship lazygit ghostty bluetuith wiremix opensnitch yazi"
+
+	step "Syncing packages"
+
+	if [[ ! -f "$manifest" ]]; then
+		warn "Missing manifest: $manifest"
+		return 1
+	fi
+
+	local packages=""
 	local pkg
 	while IFS= read -r pkg; do
 		# Skip externally managed tools
 		local is_external=false
-		for ext in $DOT_EXTERNAL_TOOLS; do
+		for ext in $external_tools; do
 			if [[ "$pkg" == "$ext" ]]; then
 				is_external=true
 				break
 			fi
 		done
 		[[ "$is_external" == "true" ]] && continue
-		printf "%s\n" "$pkg"
-	done < <(dot_packages_list "$profile")
+		packages="$packages $pkg"
+	done < <(dot_packages_read_manifest_lines "$manifest")
+
+	if [[ -n "$packages" ]]; then
+		info "Installing/verifying DNF packages..."
+		# shellcheck disable=SC2086
+		sudo dnf install -y --skip-unavailable $packages
+	fi
+
+	if [[ -x "$platform_dir/../scripts/update-tools.sh" ]]; then
+		info "Updating externally managed tools..."
+		"$platform_dir/../scripts/update-tools.sh"
+	fi
+
+	# Flatpaks
+	_dot_flatpak_sync
+
+	info "Package sync complete."
 }
 
-dot_flatpak_manifest_files() {
-	local profile="$1"
-	local dotfiles_dir="${DOTFILES_DIR:-$HOME/.dotfiles}"
+# --------------------------------------------------------------------------
+# Package check
+# --------------------------------------------------------------------------
 
-	# No base flatpak manifest — flatpaks are profile-specific
-	case "$profile" in
-	personal)
-		[[ -f "$dotfiles_dir/flatpaks.personal" ]] && printf "%s\n" "$dotfiles_dir/flatpaks.personal"
-		;;
-	esac
-}
-
-dot_flatpak_list() {
-	local profile="$1"
+dot_packages_check() {
+	local external_tools="starship lazygit ghostty bluetuith wiremix opensnitch yazi"
 	local manifest
-	while IFS= read -r manifest; do
-		[[ -z "$manifest" ]] && continue
-		dot_packages_read_manifest "$manifest"
-	done < <(dot_flatpak_manifest_files "$profile")
+	manifest="$(dot_packages_manifest_file)"
+
+	step "Checking packages"
+
+	if [[ ! -f "$manifest" ]]; then
+		warn "Missing manifest: $manifest"
+		return 1
+	fi
+
+	local missing=0
+	local pkg
+	while IFS= read -r pkg; do
+		local is_external=false
+		for ext in $external_tools; do
+			if [[ "$pkg" == "$ext" ]]; then
+				is_external=true
+				if command_exists "$pkg"; then
+					info "  OK: $pkg (external)"
+				else
+					warn "  MISSING: $pkg (install via: scripts/update-tools.sh $pkg)"
+					missing=$((missing + 1))
+				fi
+				break
+			fi
+		done
+		[[ "$is_external" == "true" ]] && continue
+
+		if rpm -q "$pkg" >/dev/null 2>&1; then
+			info "  OK: $pkg"
+		else
+			warn "  MISSING: $pkg"
+			missing=$((missing + 1))
+		fi
+	done < <(dot_packages_read_manifest_lines "$manifest")
+
+	_dot_flatpak_check
+	missing=$((missing + _flatpak_missing))
+
+	if [[ "$missing" -gt 0 ]]; then
+		warn "$missing package(s) missing. Run: dot packages sync"
+	else
+		info "All packages installed."
+	fi
 }
 
-dot_flatpak_sync() {
-	local profile="$1"
+# --------------------------------------------------------------------------
+# Flatpak helpers
+# --------------------------------------------------------------------------
 
+_dot_flatpak_manifest_file() {
+	printf "%s\n" "$DOT_PLATFORM_DIR/flatpaks"
+}
+
+_dot_flatpak_sync() {
 	if ! command_exists flatpak; then
-		warn "Flatpak not installed, skipping flatpak sync"
 		return 0
 	fi
 
 	local apps
-	apps="$(dot_flatpak_list "$profile")"
+	apps="$(_dot_flatpak_list)"
 	[[ -z "$apps" ]] && return 0
 
 	info "Syncing Flatpak apps..."
@@ -104,27 +173,22 @@ dot_flatpak_sync() {
 	done <<<"$apps"
 }
 
-dot_flatpak_update() {
-	if ! command_exists flatpak; then
-		return 0
-	fi
-
-	info "Updating Flatpak apps..."
-	flatpak update -y --noninteractive
+_dot_flatpak_list() {
+	local manifest
+	manifest="$(_dot_flatpak_manifest_file)"
+	[[ -f "$manifest" ]] || return 0
+	dot_packages_read_manifest_lines "$manifest"
 }
 
-dot_flatpak_check() {
-	local profile="$1"
-	# Sets _flatpak_missing as a side effect (can't return via stdout due to info/warn)
+_dot_flatpak_check() {
 	_flatpak_missing=0
 
 	if ! command_exists flatpak; then
-		warn "Flatpak not installed"
 		return 0
 	fi
 
 	local apps
-	apps="$(dot_flatpak_list "$profile")"
+	apps="$(_dot_flatpak_list)"
 	[[ -z "$apps" ]] && return 0
 
 	local app
@@ -139,92 +203,24 @@ dot_flatpak_check() {
 	done <<<"$apps"
 }
 
-dot_packages_sync() {
-	local profile="$1"
-
-	step "Syncing packages (profile: $profile)"
-
-	local packages
-	packages="$(dot_packages_dnf_list "$profile")"
-
-	if [[ -n "$packages" ]]; then
-		info "Installing/verifying DNF packages..."
-		# shellcheck disable=SC2086
-		sudo dnf install -y --skip-unavailable $packages
-	fi
-
-	info "Updating externally managed tools..."
-	"$DOTFILES_DIR/scripts/update-tools.sh"
-
-	dot_flatpak_sync "$profile"
-
-	info "Package sync complete."
-}
-
-dot_packages_check() {
-	local profile="$1"
-
-	step "Checking packages (profile: $profile)"
-
-	local missing=0
-	local pkg
-	while IFS= read -r pkg; do
-		# Check externally managed tools by command name
-		local is_external=false
-		for ext in $DOT_EXTERNAL_TOOLS; do
-			if [[ "$pkg" == "$ext" ]]; then
-				is_external=true
-				if command_exists "$pkg"; then
-					info "  OK: $pkg (external)"
-				else
-					warn "  MISSING: $pkg (install via: update-tools.sh $pkg)"
-					missing=$((missing + 1))
-				fi
-				break
-			fi
-		done
-		[[ "$is_external" == "true" ]] && continue
-
-		# Check dnf packages
-		if rpm -q "$pkg" >/dev/null 2>&1; then
-			info "  OK: $pkg"
-		else
-			warn "  MISSING: $pkg"
-			missing=$((missing + 1))
-		fi
-	done < <(dot_packages_list "$profile")
-
-	# Check flatpaks
-	dot_flatpak_check "$profile"
-	missing=$((missing + _flatpak_missing))
-
-	if [[ "$missing" -gt 0 ]]; then
-		warn "$missing package(s) missing. Run: dot packages sync"
-	else
-		info "All packages installed."
-	fi
-}
+# --------------------------------------------------------------------------
+# Dispatch: dot packages <action>
+# --------------------------------------------------------------------------
 
 dot_cmd_packages() {
 	local action="${1:-help}"
 	shift || true
 
-	local requested_profile=""
-
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
-		--profile)
-			shift
-			requested_profile="${1:-}"
-			;;
 		-h | --help)
 			cat <<'EOF'
-Usage: dot packages <sync|check|list> [--profile <base|personal>]
+Usage: dot packages <sync|check|list>
 
 Commands:
-  sync    Install all packages for profile
+  sync    Install all packages
   check   Check which packages are missing
-  list    List all packages for profile
+  list    List all packages
 EOF
 			return 0
 			;;
@@ -236,35 +232,18 @@ EOF
 		shift
 	done
 
-	local profile
-	if [[ -n "$requested_profile" ]]; then
-		if ! dot_profile_is_valid "$requested_profile"; then
-			error "Invalid profile '$requested_profile'. Use: base, personal"
-			return 1
-		fi
-		profile="$requested_profile"
-	else
-		profile="$(dot_profile_get)"
-	fi
-
 	case "$action" in
-	sync)
-		dot_packages_sync "$profile"
-		;;
-	check)
-		dot_packages_check "$profile"
-		;;
-	list)
-		dot_packages_list "$profile"
-		;;
+	sync) dot_packages_sync ;;
+	check) dot_packages_check ;;
+	list) dot_packages_list ;;
 	-h | --help | help)
 		cat <<'EOF'
-Usage: dot packages <sync|check|list> [--profile <base|personal>]
+Usage: dot packages <sync|check|list>
 
 Commands:
-  sync    Install all packages for profile
+  sync    Install all packages
   check   Check which packages are missing
-  list    List all packages for profile
+  list    List all packages
 EOF
 		;;
 	*)

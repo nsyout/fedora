@@ -1,2 +1,0 @@
-[includeIf "gitdir:~/projects/work/"]
-	path = ~/.config/git/work_config
