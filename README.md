@@ -130,8 +130,10 @@ Also links `dot` to `~/.local/bin/dot`.
 ### Package management
 
 Flat text file (`packages`) with one package name per line. Installed via
-`dnf`. Some tools (Ghostty, Starship, lazygit) are managed by
-`scripts/update-tools.sh` instead. Flatpak apps listed in `flatpaks`.
+`dnf`. Some tools (Ghostty, gallery-dl, Starship, lazygit) are managed by
+`scripts/update-tools.sh` instead. Ghostty automatically uses the exact Zig
+version declared by each stable release, while gallery-dl is isolated through
+`uv`. Flatpak apps are listed in `flatpaks`.
 
 ### External zsh plugins
 

@@ -57,8 +57,9 @@ print_summary() {
 }
 
 section "BLOCKING CHECKS"
-run_blocking "shellcheck" shellcheck dot scripts/lib/*.sh scripts/*.sh
-run_blocking "bash syntax" bash -n dot scripts/lib/*.sh scripts/*.sh
+run_blocking "shellcheck" shellcheck dot scripts/lib/*.sh scripts/*.sh scripts/tests/*.sh
+run_blocking "bash syntax" bash -n dot scripts/lib/*.sh scripts/*.sh scripts/tests/*.sh
+run_blocking "tool updater tests" scripts/tests/update-tools-test.sh
 run_blocking "zsh syntax" zsh -n zsh/.zshrc zsh/.zshrc.d/*.zsh zsh/*.zsh
 
 section "WARN-ONLY CHECKS"

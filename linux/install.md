@@ -13,22 +13,27 @@ sudo dnf install sway sway-config-fedora swaybg swayidle swaylock sway-systemd \
 
 ## Manually-managed tools (not in dnf repos)
 
-Ghostty and Starship are installed to `~/.local/bin` from GitHub releases.
-Update both with:
+Ghostty and Starship are installed to `~/.local/bin` from stable releases.
+The Ghostty updater reads the required Zig version from the release source and
+caches that exact compiler under `~/.local/share/dot/zig/` when Fedora's Zig
+version differs. Gallery-dl is installed and updated as an isolated `uv` tool.
+Update all externally managed tools with:
 
 ```sh
 ~/.dotfiles/scripts/update-tools.sh
 ```
 
-Or update individually: `update-tools.sh starship` or `update-tools.sh ghostty`.
+Or update individually, for example: `update-tools.sh ghostty` or
+`update-tools.sh gallery-dl`.
 
 ### Initial install
 
 ```sh
-# Ghostty build deps
-sudo dnf install zig gtk4-devel gtk4-layer-shell-devel libadwaita-devel gettext
+# Ghostty build deps (the compatible Zig compiler is managed automatically)
+sudo dnf install gtk4-devel gtk4-layer-shell-devel libadwaita-devel gettext \
+    pkgconf-pkg-config
 
-# Install/update both
+# Install/update all externally managed tools
 ~/.dotfiles/scripts/update-tools.sh
 ```
 

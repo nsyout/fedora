@@ -109,21 +109,7 @@ dot_symlink_apply() {
 
 	# dot -> ~/.local/bin/dot
 	local dot_target="$HOME/.local/bin/dot"
-	mkdir -p "$(dirname "$dot_target")"
-	if [[ -L "$dot_target" ]]; then
-		local dot_current
-		dot_current="$(readlink "$dot_target")"
-		if [[ "$dot_current" == "$DOTFILES_DIR/dot" ]]; then
-			info "  OK: ~/.local/bin/dot"
-		else
-			rm "$dot_target"
-			ln -s "$DOTFILES_DIR/dot" "$dot_target"
-			info "  UPDATED: ~/.local/bin/dot (was: $dot_current)"
-		fi
-	else
-		ln -s "$DOTFILES_DIR/dot" "$dot_target"
-		info "  LINKED: ~/.local/bin/dot"
-	fi
+	_dot_symlink_link_path "$DOTFILES_DIR/dot" "$dot_target" "$assume_yes" "~/.local/bin/dot"
 
 	# Deploy home/ tree: files mirror directly into ~/
 	# Contains .zshenv, .claude/, and other root-level dotfiles

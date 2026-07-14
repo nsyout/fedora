@@ -25,7 +25,7 @@ dot_cmd_doctor() {
 
 	# DNS
 	local dns
-	dns=$(resolvectl status 2>/dev/null | grep "Current DNS Server" | head -1 | awk '{print $NF}')
+	dns=$(resolvectl status 2>/dev/null | grep "Current DNS Server" | head -1 | awk '{print $NF}' || true)
 	echo "  DNS: ${dns:-unknown}"
 
 	# Tools

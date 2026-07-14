@@ -23,7 +23,7 @@ gh
 lazygit  # managed by update-tools.sh
 
 # Build & dev tools
-zig  # required to build ghostty from source
+zig  # general development; Ghostty updater manages its exact required version
 jq
 just
 ShellCheck
@@ -142,8 +142,8 @@ sublime-text
 
 # Cloud storage — moved to flatpaks.personal
 
-# Gallery downloads (pip-managed)
-# gallery-dl  # installed via: pip install --user gallery-dl
+# Gallery downloads (managed by update-tools.sh via uv)
+gallery-dl
 
 # AI coding agent
 

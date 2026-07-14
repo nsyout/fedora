@@ -274,9 +274,9 @@ EOF
 
 	backup_configs
 	create_directories
-	cmd_repos
+	dot_cmd_repos
 	dot_packages_sync
-	cmd_system
+	dot_cmd_system
 	dot_plugins_sync
 	dot_symlink_apply "$assume_yes"
 	configure_shell

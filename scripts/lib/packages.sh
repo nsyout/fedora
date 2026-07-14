@@ -50,7 +50,7 @@ dot_packages_sync() {
 	manifest="$(dot_packages_manifest_file)"
 
 	# Tools managed outside of dnf
-	local external_tools="starship lazygit ghostty bluetuith wiremix opensnitch yazi"
+	local external_tools="starship lazygit ghostty gallery-dl bluetuith wiremix opensnitch yazi"
 
 	step "Syncing packages"
 
@@ -96,7 +96,7 @@ dot_packages_sync() {
 # --------------------------------------------------------------------------
 
 dot_packages_check() {
-	local external_tools="starship lazygit ghostty bluetuith wiremix opensnitch yazi"
+	local external_tools="starship lazygit ghostty gallery-dl bluetuith wiremix opensnitch yazi"
 	local manifest
 	manifest="$(dot_packages_manifest_file)"
 

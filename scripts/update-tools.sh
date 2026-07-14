@@ -13,6 +13,103 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 info() { echo ":: $*"; }
 error() { echo "!! $*" >&2; }
 
+github_latest_stable_tag() {
+	local repository="$1"
+	curl -fsSL -H "Accept: application/vnd.github+json" \
+		"https://api.github.com/repos/${repository}/tags?per_page=100" |
+		jq -er '
+			[.[].name
+			| capture("^v?(?<major>[0-9]+)\\.(?<minor>[0-9]+)\\.(?<patch>[0-9]+)$")
+			| .major |= tonumber
+			| .minor |= tonumber
+			| .patch |= tonumber]
+			| max_by([.major, .minor, .patch])
+			| "v\(.major).\(.minor).\(.patch)"
+		'
+}
+
+ghostty_required_zig_version() {
+	local source_dir="$1"
+	local manifest="$source_dir/build.zig.zon"
+
+	[[ -f "$manifest" ]] || return 1
+	sed -nE 's/.*\.minimum_zig_version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$manifest" | head -1
+}
+
+zig_download_target() {
+	case "$(uname -m)" in
+	x86_64) printf '%s\n' "x86_64-linux" ;;
+	aarch64 | arm64) printf '%s\n' "aarch64-linux" ;;
+	*) return 1 ;;
+	esac
+}
+
+zig_for_version() {
+	local required_version="$1"
+	local system_zig=""
+	local system_version="none"
+
+	if system_zig=$(command -v zig 2>/dev/null); then
+		system_version=$("$system_zig" version 2>/dev/null || true)
+		if [[ "$system_version" == "$required_version" ]]; then
+			printf '%s\n' "$system_zig"
+			return 0
+		fi
+	fi
+
+	local cache_root="$HOME/.local/share/dot/zig"
+	local install_dir="$cache_root/$required_version"
+	local cached_zig="$install_dir/zig"
+	if [[ -x "$cached_zig" && "$($cached_zig version 2>/dev/null || true)" == "$required_version" ]]; then
+		printf '%s\n' "$cached_zig"
+		return 0
+	fi
+
+	if [[ -e "$install_dir" ]]; then
+		error "  Cached Zig $required_version is incomplete: $install_dir"
+		return 1
+	fi
+
+	local target
+	if ! target=$(zig_download_target); then
+		error "  Unsupported architecture for managed Zig: $(uname -m)"
+		return 1
+	fi
+
+	info "  System Zig $system_version does not match required $required_version; installing managed Zig..." >&2
+	local index_file="$BUILD_DIR/zig-download-index.json"
+	curl -fsSL "https://ziglang.org/download/index.json" -o "$index_file"
+
+	local archive_url
+	local expected_sha
+	if ! archive_url=$(jq -er --arg version "$required_version" --arg target "$target" \
+		'.[$version][$target].tarball' "$index_file") ||
+		! expected_sha=$(jq -er --arg version "$required_version" --arg target "$target" \
+			'.[$version][$target].shasum' "$index_file"); then
+		error "  Zig $required_version has no $target download in the official index"
+		return 1
+	fi
+
+	local archive="$BUILD_DIR/zig-$required_version.tar"
+	curl -fsSL "$archive_url" -o "$archive"
+	if ! printf '%s  %s\n' "$expected_sha" "$archive" | sha256sum --check --status; then
+		error "  Checksum verification failed for Zig $required_version"
+		return 1
+	fi
+
+	local extract_dir="$BUILD_DIR/zig-$required_version"
+	mkdir -p "$extract_dir"
+	tar -xf "$archive" -C "$extract_dir" --strip-components=1
+	if [[ ! -x "$extract_dir/zig" || "$("$extract_dir/zig" version 2>/dev/null || true)" != "$required_version" ]]; then
+		error "  Downloaded Zig archive did not contain the expected compiler"
+		return 1
+	fi
+
+	mkdir -p "$cache_root"
+	mv "$extract_dir" "$install_dir"
+	printf '%s\n' "$cached_zig"
+}
+
 update_starship() {
 	info "Updating starship..."
 	local version
@@ -54,27 +151,24 @@ update_ghostty() {
 	current=$("$INSTALL_DIR/ghostty" --version 2>/dev/null | head -1 | awk '{print $2}') || current="none"
 	info "  Current: $current"
 
-	local latest
-	latest=$(curl -sL -H "Accept: application/vnd.github+json" \
-		"https://api.github.com/repos/ghostty-org/ghostty/tags?per_page=1" | grep -m1 '"name"' | cut -d'"' -f4)
-
-	if [[ -z "$latest" ]]; then
+	local latest_tag
+	if ! latest_tag=$(github_latest_stable_tag "ghostty-org/ghostty"); then
 		error "  Could not determine latest stable release"
 		return 1
 	fi
+	local version="${latest_tag#v}"
 
-	info "  Latest stable: $latest"
+	info "  Latest stable: $version"
 
 	# Strip -dev+hash suffix from tip builds for comparison
 	local current_base="${current%%-*}"
-	if [[ "$current_base" == "${latest#v}" || "$current_base" == "$latest" ]]; then
+	if [[ "$current_base" == "$version" ]]; then
 		info "  Already up to date."
 		return 0
 	fi
 
-	local version="${latest#v}"
 	local url="https://release.files.ghostty.org/${version}/ghostty-${version}.tar.gz"
-	curl -sL "$url" -o "$BUILD_DIR/ghostty-source.tar.gz"
+	curl -fsSL "$url" -o "$BUILD_DIR/ghostty-source.tar.gz"
 
 	tar -xf "$BUILD_DIR/ghostty-source.tar.gz" -C "$BUILD_DIR"
 
@@ -86,15 +180,82 @@ update_ghostty() {
 		return 1
 	fi
 
-	info "  Installing build dependencies..."
-	sudo dnf install -y gtk4-devel gtk4-layer-shell-devel libadwaita-devel gettext
+	local required_zig
+	if ! required_zig=$(ghostty_required_zig_version "$src_dir") || [[ -z "$required_zig" ]]; then
+		error "  Could not determine required Zig version from build.zig.zon"
+		return 1
+	fi
+	info "  Required Zig: $required_zig"
 
-	info "  Building $latest (this takes a few minutes)..."
-	(cd "$src_dir" && zig build -Doptimize=ReleaseFast -Dversion-string="$version" -p "$HOME/.local")
+	local zig_bin
+	if ! zig_bin=$(zig_for_version "$required_zig"); then
+		return 1
+	fi
+	info "  Using Zig: $zig_bin"
+
+	local build_dependencies=(gtk4-devel gtk4-layer-shell-devel libadwaita-devel gettext pkgconf-pkg-config)
+	local missing_dependencies=()
+	local dependency
+	for dependency in "${build_dependencies[@]}"; do
+		if ! rpm -q "$dependency" >/dev/null 2>&1; then
+			missing_dependencies+=("$dependency")
+		fi
+	done
+	if [[ ${#missing_dependencies[@]} -gt 0 ]]; then
+		info "  Installing missing build dependencies: ${missing_dependencies[*]}"
+		sudo dnf install -y "${missing_dependencies[@]}"
+	else
+		info "  Build dependencies already installed."
+	fi
+
+	info "  Building $version (this takes a few minutes)..."
+	(cd "$src_dir" && "$zig_bin" build -Doptimize=ReleaseFast -Dversion-string="$version" -p "$HOME/.local")
 
 	local new_version
 	new_version=$("$INSTALL_DIR/ghostty" --version 2>/dev/null | head -1 | awk '{print $2}') || new_version="unknown"
+	if [[ "${new_version%%-*}" != "$version" ]]; then
+		error "  Ghostty installation verification failed (expected $version, got $new_version)"
+		return 1
+	fi
 	info "  Installed ghostty $new_version"
+}
+
+update_gallery_dl() {
+	info "Updating gallery-dl (stable)..."
+	if ! command -v uv >/dev/null 2>&1; then
+		error "  uv is required to manage gallery-dl"
+		return 1
+	fi
+
+	local current="none"
+	if command -v gallery-dl >/dev/null 2>&1; then
+		current=$(gallery-dl --version 2>/dev/null || true)
+		[[ -n "$current" ]] || current="unknown"
+	fi
+
+	local latest
+	if ! latest=$(curl -fsSL "https://pypi.org/pypi/gallery-dl/json" | jq -er '.info.version'); then
+		error "  Could not determine latest stable gallery-dl release"
+		return 1
+	fi
+
+	info "  Current: $current"
+	info "  Latest:  $latest"
+	if [[ "$current" == "$latest" ]]; then
+		info "  Already up to date."
+		return 0
+	fi
+
+	uv tool install --upgrade "gallery-dl==$latest"
+	hash -r
+
+	local new_version
+	new_version=$("$INSTALL_DIR/gallery-dl" --version 2>/dev/null || true)
+	if [[ "$new_version" != "$latest" ]]; then
+		error "  gallery-dl installation verification failed (expected $latest, got ${new_version:-missing})"
+		return 1
+	fi
+	info "  Installed gallery-dl $new_version"
 }
 
 update_lazygit() {
@@ -347,21 +508,22 @@ DESKTOP
 }
 
 # Main
-tools=("$@")
-if [[ ${#tools[@]} -eq 0 ]]; then
-	tools=(starship ghostty lazygit nerdfonts bluetuith wiremix opensnitch yazi obsidian discord)
-fi
-
-_updated_tools=()
-_skipped_tools=()
-_failed_tools=()
-
 _run_tool_update() {
 	local tool="$1"
-	local fn="update_${tool}"
+	local fn="update_${tool//-/_}"
 	local tmp
+	local status
 	tmp=$(mktemp)
-	if "$fn" >"$tmp" 2>&1; then
+	# Calling a function directly in an `if` test disables errexit throughout
+	# that function. Run it in a fail-fast subshell, then classify its status.
+	set +e
+	(
+		set -e
+		"$fn"
+	) >"$tmp" 2>&1
+	status=$?
+	set -e
+	if [[ "$status" -eq 0 ]]; then
 		if grep -q "Already up to date" "$tmp"; then
 			_skipped_tools+=("$tool")
 		else
@@ -377,22 +539,42 @@ _run_tool_update() {
 	rm -f "$tmp"
 }
 
-for tool in "${tools[@]}"; do
-	case "$tool" in
-	starship | ghostty | lazygit | nerdfonts | bluetuith | wiremix | opensnitch | yazi | obsidian | discord)
-		_run_tool_update "$tool"
-		;;
-	*) error "Unknown tool: $tool" ;;
-	esac
-done
+main() {
+	tools=("$@")
+	if [[ ${#tools[@]} -eq 0 ]]; then
+		tools=(starship ghostty gallery-dl lazygit nerdfonts bluetuith wiremix opensnitch yazi obsidian discord)
+	fi
 
-echo
-if [[ ${#_updated_tools[@]} -gt 0 ]]; then
-	info "Updated: ${_updated_tools[*]}"
-fi
-if [[ ${#_skipped_tools[@]} -gt 0 ]]; then
-	info "Up to date: ${_skipped_tools[*]}"
-fi
-if [[ ${#_failed_tools[@]} -gt 0 ]]; then
-	error "Failed: ${_failed_tools[*]}"
+	_updated_tools=()
+	_skipped_tools=()
+	_failed_tools=()
+
+	local tool
+	for tool in "${tools[@]}"; do
+		case "$tool" in
+		starship | ghostty | gallery-dl | lazygit | nerdfonts | bluetuith | wiremix | opensnitch | yazi | obsidian | discord)
+			_run_tool_update "$tool"
+			;;
+		*)
+			error "Unknown tool: $tool"
+			_failed_tools+=("$tool")
+			;;
+		esac
+	done
+
+	echo
+	if [[ ${#_updated_tools[@]} -gt 0 ]]; then
+		info "Updated: ${_updated_tools[*]}"
+	fi
+	if [[ ${#_skipped_tools[@]} -gt 0 ]]; then
+		info "Up to date: ${_skipped_tools[*]}"
+	fi
+	if [[ ${#_failed_tools[@]} -gt 0 ]]; then
+		error "Failed: ${_failed_tools[*]}"
+		return 1
+	fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
 fi
